@@ -1,49 +1,48 @@
 import json
 import os
 import pandas as pd
+from supabase import create_client
+from app.config import SUPABASE_URL, SUPABASE_KEY
 
-#extract data from seed.json 
 def extract():
     base_dir = os.path.dirname(__file__)
     seed_path = os.path.join(base_dir, "seed.json")
- 
+
     with open(seed_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-        
+
     print(f"Extracted {len(data)} matches from seed.json")
-    return data   
+    return data
 
 
-#tranform the data
 def transform(data):
     matches = []
     player_stats = []
     team_stats = []
-    
+
     for match in data:
         is_home = match["home_team"] == "Al Qadsiah FC"
         opponent = match["away_team"] if is_home else match["home_team"]
         goals_scored = match["score"]["home"] if is_home else match["score"]["away"]
         goals_conceded = match["score"]["away"] if is_home else match["score"]["home"]
         result = (
-        'win' if goals_scored > goals_conceded
-        else 'draw' if goals_scored == goals_conceded
-        else 'loss'
-        )      
-  
-    matches.append({
-        "id": match["match_id"],
+            "win" if goals_scored > goals_conceded
+            else "draw" if goals_scored == goals_conceded
+            else "loss"
+        )
+
+        matches.append({
+            "id": match["match_id"],
             "date": match["date"],
             "opponent": opponent,
             "home_away_neutral": "home" if is_home else "away",
             "result": result,
             "goals_scored": goals_scored,
             "goals_conceded": goals_conceded,
-            "stadium": match["venue"]   
-    })
-        
-    
-    for p in match["player_performances"]:
+            "stadium": match["venue"]
+        })
+
+        for p in match["player_performances"]:
             player_stats.append({
                 "id": f"pms-{match['match_id']}-{p['player_id']}",
                 "match_id": match["match_id"],
@@ -55,28 +54,44 @@ def transform(data):
                 "shots": p["shots"],
                 "goals": p["goals"],
                 "assists": p["assists"]
-            })   
-    
-    matches_df = pd.DataFrame(matches)
-    
-    # we'll do player and team dataframes after
-    return matches_df    
- 
-# #load()
-# #takes those 3 dataframes and inserts them into Supabase sql db
- 
-# def load(matches_df, player_df, team_df):
-#     return ('store in db...', matches_df, player_df, team_df)
- 
-# #run()
-# #main entry point to finally run the pipeline
- 
-# def run():
-#     data = extract()  
-#     matches_df, player_df, team_df =   transform(data)
-#     load (matches_df, player_df, team_df)
-    
-# if __name__ == "__main__":
-#     run()    
-    
+            })
 
+        team_stats.append({
+            "id": f"tms-{match['match_id']}",
+            "match_id": match["match_id"],
+            "possession": match.get("possession", 50.0),
+            "total_distance": match.get("total_distance", 110.0),
+            "shots_on_target": match.get("shots_on_target", 0)
+        })
+
+    matches_df = pd.DataFrame(matches)
+    player_df = pd.DataFrame(player_stats)
+    team_df = pd.DataFrame(team_stats)
+
+    print(f"Transformed: {len(matches_df)} matches, {len(player_df)} player rows, {len(team_df)} team rows")
+    return matches_df, player_df, team_df
+
+
+def load(matches_df, player_df, team_df):
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    supabase.table("matches").insert(matches_df.to_dict(orient="records")).execute()
+    print("Loaded matches")
+
+    supabase.table("player_match_stats").insert(player_df.to_dict(orient="records")).execute()
+    print("Loaded player_match_stats")
+
+    supabase.table("team_match_stats").insert(team_df.to_dict(orient="records")).execute()
+    print("Loaded team_match_stats")
+
+    print("Pipeline complete.")
+
+
+def run():
+    data = extract()
+    matches_df, player_df, team_df = transform(data)
+    load(matches_df, player_df, team_df)
+
+
+if __name__ == "__main__":
+    run()
