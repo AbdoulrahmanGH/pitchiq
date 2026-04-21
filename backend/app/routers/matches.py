@@ -13,11 +13,20 @@ def get_db():
 def get_matches_summary():
     supabase = get_db()
 
-    response = supabase.table("matches").select(
+    matches = supabase.table("matches").select(
         "id, date, opponent, home_away_neutral, result, goals_scored, goals_conceded"
-    ).execute()
+    ).execute().data
 
-    return response.data
+    team_stats = supabase.table("team_match_stats").select(
+        "match_id, possession"
+    ).execute().data
+
+    possession_by_match = {row["match_id"]: row["possession"] for row in team_stats}
+
+    for match in matches:
+        match["possession"] = possession_by_match.get(match["id"])
+
+    return matches
 
 
 @team_router.get("/readiness")
