@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PitchIQ — Squad Depth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0D1117;
+    --surface: #161B22;
+    --surface2: #1C2333;
+    --surface3: #21262D;
+    --orange: #FF6B35;
+    --orange-dim: rgba(255,107,53,0.12);
+    --text-primary: #E6EDF3;
+    --text-secondary: #7D8590;
+    --text-muted: #484F58;
+    --green: #3FB950;
+    --green-dim: rgba(63,185,80,0.12);
+    --red: #F85149;
+    --red-dim: rgba(248,81,73,0.12);
+    --yellow: #D29922;
+    --yellow-dim: rgba(210,153,34,0.13);
+    --blue: #58A6FF;
+    --blue-dim: rgba(88,166,255,0.12);
+    --purple: #A78BFA;
+    --purple-dim: rgba(167,139,250,0.12);
+  }
+  html, body, #root { width: 100%; height: 100%; background: var(--bg); font-family: 'DM Sans', sans-serif; color: var(--text-primary); overflow: hidden; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const IconDash = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".9"/>
+    <rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".5"/>
+    <rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".5"/>
+    <rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".5"/>
+  </svg>
+);
+const IconPlayers = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="5" r="3" fill="currentColor" opacity=".9"/>
+    <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity=".9"/>
+  </svg>
+);
+const IconMatches = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.3" opacity=".9"/>
+    <path d="M8 1.5C8 1.5 6 5 6 8s2 6.5 2 6.5M1.5 8h13M3 4.5C4.5 5.5 6 6 8 6s3.5-.5 5-1.5M3 11.5C4.5 10.5 6 10 8 10s3.5.5 5 1.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" opacity=".7"/>
+  </svg>
+);
+const IconSquad = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M1 8h14M8 1v14M4 3l8 10M12 3L4 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity=".9"/>
+  </svg>
+);
+
+function NavItem({ icon, label, active, onClick }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{
+      display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', borderRadius: 9, cursor: 'pointer',
+      color: active ? 'var(--orange)' : hov ? 'var(--text-primary)' : 'var(--text-secondary)',
+      background: active ? 'rgba(255,107,53,0.1)' : hov ? 'rgba(255,255,255,0.04)' : 'transparent',
+      transition: 'all 0.18s', fontSize: 13.5, fontWeight: active ? 600 : 400, position: 'relative',
+    }}>
+      {active && <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 3, height: 18, background: 'var(--orange)', borderRadius: '0 3px 3px 0' }}/>}
+      {icon}{label}
+    </div>
+  );
+}
+
+/* ── Position data ── */
+const POSITIONS = [
+  {
+    key: 'GK', label: 'Goalkeeper', plural: 'Goalkeepers',
+    color: 'var(--blue)', colorHex: '#58A6FF', dim: 'var(--blue-dim)',
+    count: 2, total: 3,
+    players: [
+      { name: 'Mohammed Al-Rubaie', number: '1',  status: 'FIT' },
+      { name: 'Fawaz Al-Qarni',     number: '16', status: 'FIT' },
+      { name: 'Khaled Al-Aqidi',    number: '30', status: 'INJURED' },
+    ],
+  },
+  {
+    key: 'DEF', label: 'Defender', plural: 'Defenders',
+    color: 'var(--green)', colorHex: '#3FB950', dim: 'var(--green-dim)',
+    count: 7, total: 8,
+    players: [
+      { name: 'Yasser Al-Shahrani',  number: '3',  status: 'FIT' },
+      { name: 'Ali Al-Bulayhi',      number: '5',  status: 'FIT' },
+      { name: 'Mohammed Al-Burayk',  number: '13', status: 'FIT' },
+      { name: 'Hamad Al-Yami',       number: '22', status: 'FIT' },
+      { name: 'Sultan Al-Ghannam',   number: '4',  status: 'FIT' },
+      { name: 'Abdulaziz Al-Dossari',number: '25', status: 'FIT' },
+      { name: 'Khaled Al-Ghamdi',    number: '6',  status: 'FIT' },
+      { name: 'Hassan Al-Tambakti',  number: '15', status: 'INJURED' },
+    ],
+  },
+  {
+    key: 'MID', label: 'Midfielder', plural: 'Midfielders',
+    color: 'var(--purple)', colorHex: '#A78BFA', dim: 'var(--purple-dim)',
+    count: 8, total: 9,
+    players: [
+      { name: 'Salem Al-Dawsari',    number: '10', status: 'AT RISK' },
+      { name: 'Matheus Pereira',     number: '7',  status: 'AT RISK' },
+      { name: 'Abdullah Radif',      number: '8',  status: 'FIT' },
+      { name: 'Nasser Al-Dawsari',   number: '21', status: 'INJURED' },
+      { name: 'Sami Al-Najei',       number: '14', status: 'FIT' },
+      { name: 'Mohammed Kanno',      number: '18', status: 'FIT' },
+      { name: 'Hattan Bahebri',      number: '11', status: 'FIT' },
+      { name: 'Yahya Al-Shehri',     number: '20', status: 'FIT' },
+      { name: 'Abdulelah Al-Malki',  number: '26', status: 'FIT' },
+    ],
+  },
+  {
+    key: 'FWD', label: 'Forward', plural: 'Forwards',
+    color: 'var(--orange)', colorHex: '#FF6B35', dim: 'var(--orange-dim)',
+    count: 7, total: 7,
+    players: [
+      { name: 'Abdulrahman Ghareeb', number: '17', status: 'AT RISK' },
+      { name: 'Firas Al-Buraikan',   number: '9',  status: 'FIT' },
+      { name: 'Omar Al-Soma',        number: '11', status: 'FIT' },
+      { name: 'Saleh Al-Shehri',     number: '19', status: 'FIT' },
+      { name: 'Fahad Al-Muwallad',   number: '23', status: 'FIT' },
+      { name: 'Ali Al-Hassan',       number: '27', status: 'FIT' },
+      { name: 'Khaled Shahin',       number: '29', status: 'FIT' },
+    ],
+  },
+];
+
+const MAX_COUNT = 10;
+
+/* ── Animated bar ── */
+function Bar({ pos, acc, delay }) {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setWidth((pos.count / MAX_COUNT) * 100), delay);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 0 }}>
+      {/* Label */}
+      <div style={{ width: 110, flexShrink: 0, textAlign: 'right' }}>
+        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>{pos.plural}</span>
+      </div>
+      {/* Track */}
+      <div style={{ flex: 1, height: 28, background: 'rgba(255,255,255,0.04)', borderRadius: 6, position: 'relative', overflow: 'visible' }}>
+        {/* Grid lines */}
+        {[2,4,6,8,10].map(n => (
+          <div key={n} style={{
+            position: 'absolute', left: `${(n / MAX_COUNT) * 100}%`, top: 0, bottom: 0,
+            width: 1, background: 'rgba(255,255,255,0.05)',
+          }}/>
+        ))}
+        {/* Fill */}
+        <div style={{
+          position: 'absolute', left: 0, top: 3, bottom: 3,
+          width: `${width}%`,
+          background: `linear-gradient(90deg, ${pos.colorHex}55, ${pos.colorHex})`,
+          borderRadius: 4,
+          transition: 'width 1s cubic-bezier(0.4,0,0.2,1)',
+          boxShadow: `0 0 16px ${pos.colorHex}44`,
+        }}>
+          {/* Shine */}
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '45%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px 4px 0 0' }}/>
+        </div>
+        {/* Count label — outside bar */}
+        <div style={{
+          position: 'absolute',
+          left: `calc(${width}% + 10px)`,
+          top: '50%', transform: 'translateY(-50%)',
+          fontFamily: 'Space Grotesk', fontSize: 14, fontWeight: 700,
+          color: pos.colorHex,
+          transition: 'left 1s cubic-bezier(0.4,0,0.2,1)',
+          whiteSpace: 'nowrap',
+        }}>{pos.count} <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>available</span></div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Depth card ── */
+function DepthCard({ pos, acc }) {
+  const [hov, setHov] = useState(false);
+  const available = pos.players.filter(p => p.status === 'FIT').length;
+  const atRisk    = pos.players.filter(p => p.status === 'AT RISK').length;
+  const injured   = pos.players.filter(p => p.status === 'INJURED').length;
+  const lowDepth  = pos.count < 3;
+
+  return (
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{
+      flex: 1,
+      background: hov ? 'linear-gradient(145deg, #202838 0%, #1C2333 100%)' : 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)',
+      border: hov ? `1px solid ${pos.colorHex}30` : '1px solid rgba(255,255,255,0.07)',
+      borderRadius: 16, overflow: 'hidden',
+      transition: 'background 0.2s, border 0.2s, box-shadow 0.2s',
+      boxShadow: hov ? `0 8px 32px rgba(0,0,0,0.4), 0 0 20px ${pos.colorHex}0A` : '0 4px 16px rgba(0,0,0,0.25)',
+    }}>
+      {/* Top accent bar */}
+      <div style={{ height: 3, background: `linear-gradient(90deg, transparent, ${pos.colorHex}88, ${pos.colorHex}, ${pos.colorHex}88, transparent)` }}/>
+
+      <div style={{ padding: '18px 20px 20px' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 8px', borderRadius: 4, background: pos.dim, color: pos.color }}>{pos.key}</div>
+              {lowDepth && (
+                <div style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: 'rgba(248,81,73,0.1)', color: 'var(--red)', border: '1px solid rgba(248,81,73,0.2)' }}>⚠ LOW</div>
+              )}
+            </div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 28, fontWeight: 700, lineHeight: 1, color: pos.color, letterSpacing: '-0.5px' }}>{pos.count}</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>of {pos.total} total</div>
+          </div>
+          {/* Status dots */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
+            {available > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)' }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)' }}/>{available} fit</div>}
+            {atRisk > 0    && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)' }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--yellow)' }}/>{atRisk} at risk</div>}
+            {injured > 0   && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)' }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--red)' }}/>{injured} injured</div>}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', marginBottom: 14 }}/>
+
+        {/* Player list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {pos.players.map(p => {
+            const sc = p.status === 'FIT' ? 'var(--green)' : p.status === 'AT RISK' ? 'var(--yellow)' : 'var(--red)';
+            return (
+              <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 6, background: 'linear-gradient(135deg, #252D3A, #1A2030)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontFamily: 'Space Grotesk', fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>{p.number}</div>
+                <span style={{ fontSize: 12, fontWeight: 500, color: p.status === 'INJURED' ? 'var(--text-muted)' : 'var(--text-primary)', flex: 1, textDecoration: p.status === 'INJURED' ? 'line-through' : 'none', textDecorationColor: 'rgba(255,255,255,0.2)' }}>{p.name}</span>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: sc, flexShrink: 0, boxShadow: `0 0 4px ${sc}` }}/>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Low depth warning */}
+        {lowDepth && (
+          <div style={{ marginTop: 14, padding: '9px 12px', borderRadius: 8, background: 'rgba(248,81,73,0.08)', border: '1px solid rgba(248,81,73,0.18)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1L11 10H1L6 1Z" stroke="var(--red)" strokeWidth="1.2" strokeLinejoin="round"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="var(--red)" strokeWidth="1.2" strokeLinecap="round"/><circle cx="6" cy="9" r=".6" fill="var(--red)"/></svg>
+            <span style={{ fontSize: 10.5, color: 'var(--red)', fontWeight: 500 }}>Low depth — rotation risk</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [activeNav, setActiveNav] = useState('Squad Depth');
+  const [tweaksOpen, setTweaksOpen] = useState(false);
+  const [tweaks, setTweaks] = useState(/*EDITMODE-BEGIN*/{
+    "accentColor": "#FF6B35",
+    "showInjured": true
+  }/*EDITMODE-END*/);
+
+  useEffect(() => {
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === '__activate_edit_mode') setTweaksOpen(true);
+      if (e.data?.type === '__deactivate_edit_mode') setTweaksOpen(false);
+    });
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+  }, []);
+
+  const updateTweak = (key, val) => {
+    setTweaks(p => ({ ...p, [key]: val }));
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
+  };
+
+  const acc = tweaks.accentColor;
+
+  const navItems = [
+    { id: 'Dashboard',   icon: <IconDash/>,    label: 'Dashboard' },
+    { id: 'Players',     icon: <IconPlayers/>, label: 'Players' },
+    { id: 'Matches',     icon: <IconMatches/>, label: 'Matches' },
+    { id: 'Squad Depth', icon: <IconSquad/>,   label: 'Squad Depth' },
+  ];
+
+  const totalAvailable = POSITIONS.reduce((a, p) => a + p.count, 0);
+  const totalSquad     = POSITIONS.reduce((a, p) => a + p.total, 0);
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: 'var(--bg)' }}>
+
+      {/* SIDEBAR */}
+      <div style={{ width: 220, flexShrink: 0, background: 'linear-gradient(180deg, #131920 0%, #111519 100%)', borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', padding: '0 12px' }}>
+        <div style={{ padding: '24px 6px 28px', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg, ${acc}, #c94a1a)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <ellipse cx="7" cy="7" rx="5.5" ry="5.5" stroke="white" strokeWidth="1.2" opacity=".8"/>
+                <line x1="7" y1="1.5" x2="7" y2="12.5" stroke="white" strokeWidth="1" opacity=".6"/>
+                <line x1="1.5" y1="7" x2="12.5" y2="7" stroke="white" strokeWidth="1" opacity=".6"/>
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 17, color: acc, letterSpacing: '0.04em' }}>PitchIQ</div>
+              <div style={{ fontSize: 9.5, color: 'var(--text-muted)', letterSpacing: '0.08em', marginTop: -1 }}>AL QADSIAH FC</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--text-muted)', padding: '4px 14px 8px', textTransform: 'uppercase' }}>Analytics</div>
+          {navItems.map(n => <NavItem key={n.id} icon={n.icon} label={n.label} active={activeNav === n.id} onClick={() => setActiveNav(n.id)}/>)}
+        </div>
+        <div style={{ marginTop: 'auto', padding: '20px 6px 24px' }}>
+          <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 10 }}>Squad Overview</div>
+          <div style={{ padding: '14px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Available</span>
+              <span style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 20, color: 'var(--text-primary)' }}>{totalAvailable}<span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>/{totalSquad}</span></span>
+            </div>
+            <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2 }}>
+              <div style={{ width: `${totalAvailable/totalSquad*100}%`, height: '100%', background: `linear-gradient(90deg, ${acc}88, ${acc})`, borderRadius: 2 }}/>
+            </div>
+          </div>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 16, paddingTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <circle cx="6" cy="4.5" r="2.5" fill="var(--text-muted)"/>
+                  <path d="M1 11c0-2.761 2.239-4 5-4s5 1.239 5 4" stroke="var(--text-muted)" strokeWidth="1.2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--text-secondary)' }}>Analyst</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Performance Staff</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* MAIN */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* Top bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', height: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Squad Depth</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Position availability across the squad</div>
+          </div>
+          {/* Legend */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {[['var(--green)', 'FIT'], ['var(--yellow)', 'AT RISK'], ['var(--red)', 'INJURED']].map(([c, l]) => (
+              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: c }}/>
+                <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', letterSpacing: '0.06em' }}>{l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Scroll */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 48px' }}>
+
+          {/* Summary cards */}
+          <div style={{ display: 'flex', gap: 16, marginBottom: 28 }}>
+            {POSITIONS.map(pos => (
+              <div key={pos.key} style={{
+                flex: 1,
+                background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: 14, padding: '18px 22px',
+                position: 'relative', overflow: 'hidden',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              }}>
+                <div style={{ position: 'absolute', top: -24, right: -24, width: 80, height: 80, background: `radial-gradient(circle, ${pos.colorHex}18 0%, transparent 70%)` }}/>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 4, background: pos.dim, color: pos.color }}>{pos.key}</div>
+                </div>
+                <div style={{ fontFamily: 'Space Grotesk', fontSize: 38, fontWeight: 700, lineHeight: 1, color: pos.color, letterSpacing: '-1px' }}>{pos.count}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>{pos.plural} available</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Bar chart */}
+          <div style={{
+            background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: 16, padding: '28px 32px',
+            marginBottom: 24,
+            boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+              <div style={{ width: 3, height: 18, background: acc, borderRadius: 2 }}/>
+              <div style={{ fontFamily: 'Space Grotesk', fontSize: 15, fontWeight: 600 }}>Availability by Position</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>Available players · max 10</div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {POSITIONS.map((pos, i) => <Bar key={pos.key} pos={pos} acc={acc} delay={i * 120}/>)}
+            </div>
+
+            {/* X-axis ticks */}
+            <div style={{ display: 'flex', marginTop: 14, paddingLeft: 124 }}>
+              {[0,2,4,6,8,10].map(n => (
+                <div key={n} style={{ flex: n === 0 ? 0 : 1, fontSize: 9.5, color: 'var(--text-muted)', textAlign: n === 0 ? 'left' : 'center', letterSpacing: '0.04em' }}>{n}</div>
+              ))}
+            </div>
+          </div>
+
+          {/* Depth cards */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 3, height: 18, background: acc, borderRadius: 2 }}/>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 15, fontWeight: 600 }}>Position Breakdown</div>
+          </div>
+          <div style={{ display: 'flex', gap: 16 }}>
+            {POSITIONS.map(pos => <DepthCard key={pos.key} pos={pos} acc={acc}/>)}
+          </div>
+
+        </div>
+      </div>
+
+      {/* TWEAKS */}
+      {tweaksOpen && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, width: 260, background: '#1C2333', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: 20, zIndex: 1000, boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 16, color: 'var(--text-primary)', fontFamily: 'Space Grotesk' }}>Tweaks</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.08em' }}>ACCENT COLOR</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {['#FF6B35','#4ECDC4','#A78BFA','#F59E0B'].map(c => (
+                  <div key={c} onClick={() => updateTweak('accentColor', c)} style={{ width: 28, height: 28, borderRadius: 7, background: c, cursor: 'pointer', border: tweaks.accentColor === c ? '2px solid white' : '2px solid transparent', transition: 'border 0.15s' }}/>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 10.5, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>SHOW INJURED</span>
+              <div onClick={() => updateTweak('showInjured', !tweaks.showInjured)} style={{ width: 36, height: 20, borderRadius: 10, background: tweaks.showInjured ? acc : 'rgba(255,255,255,0.1)', cursor: 'pointer', position: 'relative', transition: 'background 0.2s' }}>
+                <div style={{ position: 'absolute', top: 3, left: tweaks.showInjured ? 18 : 3, width: 14, height: 14, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.4)' }}/>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

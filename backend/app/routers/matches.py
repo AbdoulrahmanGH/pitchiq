@@ -52,9 +52,9 @@ def get_team_readiness():
         total_minutes = data["total_minutes"]
         reasons = []
         if total_minutes > 300:
-            reasons.append(f"total minutes ({total_minutes}) exceeds 300")
+            reasons.append(f"High workload — {total_minutes} minutes played")
         if avg_sprints > 40:
-            reasons.append(f"avg sprints per match ({avg_sprints}) exceeds 40")
+            reasons.append(f"High sprint load — averaging {int(avg_sprints)} sprints per match")
         if reasons:
             at_risk.append({
                 "player_id": pid,

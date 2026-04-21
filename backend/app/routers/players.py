@@ -15,8 +15,7 @@ PLAYER_POSITIONS = {
     "player-013": "Midfielder", "player-014": "Midfielder", "player-015": "Midfielder",
     "player-016": "Midfielder", "player-017": "Forward",    "player-018": "Forward",
     "player-019": "Forward",    "player-020": "Forward",    "player-021": "Forward",
-    "player-022": "Midfielder", "player-023": "Midfielder", "player-024": "Forward",
-    "player-025": "Defender",   "player-026": "Forward",    "player-027": "Defender",
+    "player-022": "Midfielder", "player-027": "Defender",
     "player-028": "Defender",   "player-029": "Defender",   "player-030": "Defender",
     "player-031": "Midfielder", "player-032": "Midfielder", "player-033": "Midfielder",
     "player-034": "Midfielder", "player-035": "Forward",    "player-036": "Forward",
@@ -94,9 +93,9 @@ def get_fatigue_risk():
         total_minutes = data["total_minutes"]
         reasons = []
         if total_minutes > 300:
-            reasons.append(f"total minutes ({total_minutes}) exceeds 300")
+            reasons.append(f"High workload — {total_minutes} minutes played")
         if avg_sprints > 40:
-            reasons.append(f"avg sprints per match ({avg_sprints}) exceeds 40")
+            reasons.append(f"High sprint load — averaging {int(avg_sprints)} sprints per match")
         if reasons:
             result.append({
                 "player_id": pid,
@@ -115,13 +114,13 @@ def get_squad_depth():
     response = supabase.table("player_match_stats").select("player_id").execute()
 
     seen = set()
-    depth = {"Goalkeeper": 0, "Defender": 0, "Midfielder": 0, "Forward": 0}
+    depth = {"Goalkeeper": [], "Defender": [], "Midfielder": [], "Forward": []}
     for row in response.data:
         pid = row["player_id"]
         if pid not in seen:
             seen.add(pid)
             pos = PLAYER_POSITIONS.get(pid)
             if pos in depth:
-                depth[pos] += 1
+                depth[pos].append(pid)
 
     return depth
