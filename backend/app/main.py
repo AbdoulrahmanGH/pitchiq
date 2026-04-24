@@ -19,5 +19,3 @@ def health():
 app.include_router(players.router)
 app.include_router(matches_router)
 app.include_router(team_router)
-
-

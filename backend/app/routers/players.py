@@ -32,12 +32,8 @@ def get_player_performance():
         "player_id, minutes_played, distance_covered, sprints, passes, shots, goals, assists"
     ).execute()
 
-    rows = response.data
-    #print(rows)
-
-    # aggregate per player using a dictionary
     aggregated = {}
-    for row in rows:
+    for row in response.data:
         pid = row["player_id"]
         if pid not in aggregated:
             aggregated[pid] = {
@@ -61,7 +57,6 @@ def get_player_performance():
         p["avg_distance"].append(row["distance_covered"])
         p["matches_played"] += 1
 
-    # calculate average distance
     result = []
     for p in aggregated.values():
         p["avg_distance"] = round(sum(p["avg_distance"]) / len(p["avg_distance"]), 2)
