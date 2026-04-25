@@ -38,3 +38,25 @@ html, body, #root {
 ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 4px; }
 
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* Horizontal scrollbar */
+::-webkit-scrollbar:horizontal { height: 4px; }
+
+/* Mobile column hiding — must use !important to beat inline display values */
+@media (max-width: 768px) {
+  .col-hide-mobile { display: none !important; }
+}
+
+/* Players table scrollbar — always visible, orange on dark track */
+.table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #FF6B35 #161B22;
+}
+.table-scroll::-webkit-scrollbar { height: 6px; }
+.table-scroll::-webkit-scrollbar-track { background: #161B22; border-radius: 3px; }
+.table-scroll::-webkit-scrollbar-thumb { background: #FF6B35; border-radius: 3px; }
+.table-scroll::-webkit-scrollbar-thumb:hover { background: #ff8c5a; }
+
+/* Actual table body — scrollable but bottom scrollbar hidden (top mirror handles it) */
+.table-scroll-body { -ms-overflow-style: none; scrollbar-width: none; }
+.table-scroll-body::-webkit-scrollbar { display: none; }

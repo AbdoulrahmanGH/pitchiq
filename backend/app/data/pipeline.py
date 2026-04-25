@@ -53,7 +53,15 @@ def transform(data):
                 "passes": p["passes_attempted"],
                 "shots": p["shots"],
                 "goals": p["goals"],
-                "assists": p["assists"]
+                "assists": p["assists"],
+                "expected_goals": p.get("expected_goals", 0.0),
+                "expected_assists": p.get("expected_assists", 0.0),
+                "expected_saves": p.get("expected_saves", 0.0),
+                "key_passes": p.get("key_passes", 0),
+                "progressive_carries": p.get("progressive_carries", 0),
+                "dribbles_attempted": p.get("dribbles_attempted", 0),
+                "dribbles_completed": p.get("dribbles_completed", 0),
+                "tackles": p.get("tackles", 0),
             })
 
         team_stats.append({

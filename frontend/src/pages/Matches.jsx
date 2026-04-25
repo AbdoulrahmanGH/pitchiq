@@ -55,10 +55,8 @@ function MatchCard({ match }) {
         position: 'relative', overflow: 'hidden', cursor: 'default',
       }}
     >
-      {/* Left result accent */}
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: res.color, borderRadius: '3px 0 0 3px' }} />
 
-      {/* Date + location */}
       <div style={{ width: 88, flexShrink: 0, paddingLeft: 8 }}>
         <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>{formatDate(match.date)}</div>
         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>{isHome ? 'Home' : 'Away'}</div>
@@ -67,18 +65,14 @@ function MatchCard({ match }) {
         </div>
       </div>
 
-      {/* Divider */}
       <div style={{ width: 1, height: 56, background: 'rgba(255,255,255,0.05)', margin: '0 24px', flexShrink: 0 }} />
 
-      {/* Teams & score */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-        {/* AQ side */}
         <div style={{ flex: 1, textAlign: 'right', paddingRight: 20 }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Al Qadsiah</div>
           <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Al Qadsiah FC</div>
         </div>
 
-        {/* Score box */}
         <div style={{ flexShrink: 0, textAlign: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ fontFamily: 'Space Grotesk', fontSize: 38, fontWeight: 700, lineHeight: 1, letterSpacing: '-1px', color: match.result !== 'loss' ? 'var(--text-primary)' : 'rgba(230,237,243,0.5)' }}>
@@ -96,17 +90,14 @@ function MatchCard({ match }) {
           </div>
         </div>
 
-        {/* Opponent side */}
         <div style={{ flex: 1, textAlign: 'left', paddingLeft: 20 }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 2 }}>{match.opponent}</div>
           <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{venue}</div>
         </div>
       </div>
 
-      {/* Divider */}
       <div style={{ width: 1, height: 56, background: 'rgba(255,255,255,0.05)', margin: '0 24px', flexShrink: 0 }} />
 
-      {/* Possession */}
       {match.possession != null
         ? <PossessionBar pct={match.possession} color={res.color} />
         : <div style={{ width: 160, flexShrink: 0, textAlign: 'center', fontSize: 11, color: '#8B949E' }}>No data</div>
@@ -143,13 +134,11 @@ export default function Matches() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', height: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '0 20px', minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Match History</div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Saudi Pro League 2025/26</div>
         </div>
-        {/* Form pills */}
         {matches.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 10, color: 'var(--text-muted)', marginRight: 4, letterSpacing: '0.08em' }}>FORM</span>
@@ -163,15 +152,13 @@ export default function Matches() {
         )}
       </div>
 
-      {/* Scroll area */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 48px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 48px', minWidth: 0 }}>
         {loading && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-secondary)', fontSize: 14 }}>Loading...</div>}
         {error   && <div style={{ padding: '16px 20px', background: 'var(--red-dim)', border: '1px solid rgba(248,81,73,0.2)', borderRadius: 12, color: 'var(--red)', fontSize: 13 }}>Failed to load: {error}</div>}
 
         {!loading && !error && (
           <>
-            {/* Summary cards */}
-            <div style={{ display: 'flex', gap: 16, marginBottom: 28 }}>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
               {summaryCards.map(({ label, value, color, sub }) => (
                 <div key={label} style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '20px 24px', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
                   <div style={{ position: 'absolute', top: -20, right: -20, width: 72, height: 72, background: `radial-gradient(circle, ${color}1A 0%, transparent 70%)`, pointerEvents: 'none' }} />
@@ -182,14 +169,12 @@ export default function Matches() {
               ))}
             </div>
 
-            {/* Section header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <div style={{ width: 3, height: 18, background: ACC, borderRadius: 2 }} />
               <div style={{ fontFamily: 'Space Grotesk', fontSize: 15, fontWeight: 600 }}>All Matches</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sorted.length} results</div>
             </div>
 
-            {/* Match cards */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {sorted.map(m => <MatchCard key={m.id} match={m} />)}
             </div>

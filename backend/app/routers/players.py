@@ -29,7 +29,9 @@ def get_player_performance():
     supabase = get_db()
 
     response = supabase.table("player_match_stats").select(
-        "player_id, minutes_played, distance_covered, sprints, passes, shots, goals, assists"
+        "player_id, minutes_played, distance_covered, sprints, passes, shots, goals, assists, "
+        "expected_goals, expected_assists, key_passes, progressive_carries, "
+        "dribbles_attempted, dribbles_completed, tackles"
     ).execute()
 
     aggregated = {}
@@ -45,7 +47,14 @@ def get_player_performance():
                 "total_passes": 0,
                 "total_sprints": 0,
                 "avg_distance": [],
-                "matches_played": 0
+                "matches_played": 0,
+                "total_expected_goals": 0.0,
+                "total_expected_assists": 0.0,
+                "total_key_passes": 0,
+                "total_progressive_carries": 0,
+                "total_tackles": 0,
+                "total_dribbles_attempted": 0,
+                "total_dribbles_completed": 0,
             }
         p = aggregated[pid]
         p["total_minutes"] += row["minutes_played"]
@@ -56,10 +65,22 @@ def get_player_performance():
         p["total_sprints"] += row["sprints"]
         p["avg_distance"].append(row["distance_covered"])
         p["matches_played"] += 1
+        p["total_expected_goals"] += row.get("expected_goals") or 0.0
+        p["total_expected_assists"] += row.get("expected_assists") or 0.0
+        p["total_key_passes"] += row.get("key_passes") or 0
+        p["total_progressive_carries"] += row.get("progressive_carries") or 0
+        p["total_tackles"] += row.get("tackles") or 0
+        p["total_dribbles_attempted"] += row.get("dribbles_attempted") or 0
+        p["total_dribbles_completed"] += row.get("dribbles_completed") or 0
 
     result = []
     for p in aggregated.values():
         p["avg_distance"] = round(sum(p["avg_distance"]) / len(p["avg_distance"]), 2)
+        p["total_expected_goals"] = round(p["total_expected_goals"], 2)
+        p["total_expected_assists"] = round(p["total_expected_assists"], 2)
+        attempted = p.pop("total_dribbles_attempted")
+        completed = p.pop("total_dribbles_completed")
+        p["dribble_success_rate"] = round((completed / attempted * 100), 1) if attempted > 0 else 0.0
         result.append(p)
 
     return result
@@ -83,11 +104,11 @@ def get_fatigue_risk():
         aggregated[pid]["matches"] += 1
 
     result = []
-    for pid, data in aggregated.items():
-        avg_sprints = round(sum(data["sprints_list"]) / data["matches"], 2)
-        total_minutes = data["total_minutes"]
+    for pid, stats in aggregated.items():
+        avg_sprints = round(sum(stats["sprints_list"]) / stats["matches"], 2)
+        total_minutes = stats["total_minutes"]
         reasons = []
-        if total_minutes > 300:
+        if total_minutes > 400:
             reasons.append(f"High workload — {total_minutes} minutes played")
         if avg_sprints > 40:
             reasons.append(f"High sprint load — averaging {int(avg_sprints)} sprints per match")
@@ -118,4 +139,5 @@ def get_squad_depth():
             if pos in depth:
                 depth[pos].append(pid)
 
+    depth["total_players"] = len(seen)
     return depth

@@ -47,11 +47,11 @@ def get_team_readiness():
         aggregated[pid]["matches"] += 1
 
     at_risk = []
-    for pid, data in aggregated.items():
-        avg_sprints = round(sum(data["sprints_list"]) / data["matches"], 2)
-        total_minutes = data["total_minutes"]
+    for pid, stats in aggregated.items():
+        avg_sprints = round(sum(stats["sprints_list"]) / stats["matches"], 2)
+        total_minutes = stats["total_minutes"]
         reasons = []
-        if total_minutes > 300:
+        if total_minutes > 400:
             reasons.append(f"High workload — {total_minutes} minutes played")
         if avg_sprints > 40:
             reasons.append(f"High sprint load — averaging {int(avg_sprints)} sprints per match")

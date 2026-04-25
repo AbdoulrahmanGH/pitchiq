@@ -192,16 +192,14 @@ export default function Dashboard() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', height: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Squad Dashboard</div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Saudi Pro League 2025/26</div>
         </div>
       </div>
 
-      {/* Scroll area */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 40px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 40px', minWidth: 0 }}>
         {loading && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-secondary)', fontSize: 14 }}>Loading...</div>
         )}
@@ -212,18 +210,16 @@ export default function Dashboard() {
         )}
         {!loading && !error && (
           <>
-            {/* Stat cards */}
-            <div style={{ display: 'flex', gap: 18, marginBottom: 24 }}>
+            <div style={{ display: 'flex', gap: 18, marginBottom: 24, flexWrap: 'wrap' }}>
               <StatCard title="Squad Readiness" value={readiness?.readiness_score ?? '—'} sub="Overall squad fitness index">
                 <CircularProgress value={readiness?.readiness_score ?? 0} />
               </StatCard>
-              <StatCard title="Players Available" value="18/26" sub="8 unavailable — 2 injured, 6 rotation" />
+              <StatCard title="Players Available" value="18/26" sub="Based on squad activity data" />
               <StatCard title="Saudi Pro League" value={`${wins}W · ${draws}D · ${losses}L`} sub={`Last ${matches.length} matches · GF ${gf}  GA ${ga}`}>
                 <RecordDisplay matches={matches} />
               </StatCard>
             </div>
 
-            {/* Fatigue Risk */}
             {readiness?.at_risk_players?.length > 0 && (
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -241,11 +237,9 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Bottom row */}
-            <div style={{ display: 'flex', gap: 18 }}>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
               {lastMatch && <LastMatchCard match={lastMatch} />}
 
-              {/* Recent form */}
               <div style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden' }}>
                 <div style={{ padding: '20px 20px 0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>

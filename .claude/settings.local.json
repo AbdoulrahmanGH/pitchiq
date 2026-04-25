@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(git rm *)",
-      "Bash(python -m app.data.cleanup)"
+      "Bash(python -m app.data.cleanup)",
+      "Bash(pip list *)",
+      "Bash(python -m app.data.migrate)",
+      "PowerShell(cd \"C:\\\\Users\\\\abdul\\\\Desktop\\\\pitchiq\\\\backend\"; Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd \"C:\\\\Users\\\\abdul\\\\Desktop\\\\pitchiq\\\\backend\"; uvicorn app.main:app --reload --port 8000')"
     ]
   }
 }

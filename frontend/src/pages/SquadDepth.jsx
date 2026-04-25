@@ -32,7 +32,6 @@ function DepthCard({ pos, playerIds, atRiskIds }) {
     >
       <div style={{ height: 3, background: `linear-gradient(90deg, transparent, ${pos.colorHex}88, ${pos.colorHex}, ${pos.colorHex}88, transparent)` }} />
       <div style={{ padding: '18px 20px 20px' }}>
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -44,7 +43,6 @@ function DepthCard({ pos, playerIds, atRiskIds }) {
             <div style={{ fontFamily: 'Space Grotesk', fontSize: 28, fontWeight: 700, lineHeight: 1, color: pos.color, letterSpacing: '-0.5px' }}>{count}</div>
             <div style={{ fontSize: 10.5, color: '#8B949E', marginTop: 2 }}>{pos.plural.toLowerCase()} in squad</div>
           </div>
-          {/* Status dots */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
             {(() => {
               const atRisk = playerIds.filter(id => atRiskIds.has(id)).length;
@@ -61,7 +59,6 @@ function DepthCard({ pos, playerIds, atRiskIds }) {
 
         <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', marginBottom: 14 }} />
 
-        {/* Player list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {playerIds.map(id => {
             const isRisk = atRiskIds.has(id);
@@ -113,19 +110,15 @@ export default function SquadDepth() {
 
   const atRiskIds = new Set(fatigue.map(p => p.player_id));
 
-  // depth is now { Goalkeeper: [...ids], Defender: [...ids], ... }
   const chartData = depth ? POSITIONS.map(p => ({
     position: p.plural,
     count:    (depth[p.key] || []).length,
     colorHex: p.colorHex,
   })) : [];
 
-  const totalAvailable = depth ? POSITIONS.reduce((s, p) => s + (depth[p.key] || []).length, 0) : 0;
-
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', height: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '0 20px', minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Squad Depth</div>
           <div style={{ fontSize: 11, color: '#8B949E', marginTop: 1 }}>Position availability across the squad</div>
@@ -140,15 +133,13 @@ export default function SquadDepth() {
         </div>
       </div>
 
-      {/* Scroll */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 48px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 48px', minWidth: 0 }}>
         {loading && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: '#8B949E', fontSize: 14 }}>Loading...</div>}
         {error   && <div style={{ padding: '16px 20px', background: 'var(--red-dim)', border: '1px solid rgba(248,81,73,0.2)', borderRadius: 12, color: 'var(--red)', fontSize: 13 }}>Failed to load: {error}</div>}
 
         {!loading && !error && depth && (
           <>
-            {/* Summary cards — count from API player ID arrays */}
-            <div style={{ display: 'flex', gap: 16, marginBottom: 28 }}>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
               {POSITIONS.map(pos => {
                 const ids = depth[pos.key] || [];
                 return (
@@ -164,17 +155,16 @@ export default function SquadDepth() {
               })}
             </div>
 
-            {/* Bar chart */}
             <div style={{ background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '28px 32px', marginBottom: 24, boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
                 <div style={{ width: 3, height: 18, background: ACC, borderRadius: 2 }} />
                 <div style={{ fontFamily: 'Space Grotesk', fontSize: 15, fontWeight: 600 }}>Availability by Position</div>
                 <div style={{ fontSize: 10.5, color: '#8B949E' }}>
-                  {totalAvailable} players appeared in at least one match
+                  {depth.total_players} players appeared in at least one match
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 60, top: 0, bottom: 0 }} barCategoryGap={16}>
+                <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 60, top: 0, bottom: 0 }} barCategoryGap={16} defaultIndex={undefined}>
                   <XAxis
                     type="number" domain={[0, 12]}
                     tick={{ fill: '#6E7681', fontSize: 10 }}
@@ -185,7 +175,7 @@ export default function SquadDepth() {
                     tick={{ fill: '#8B949E', fontSize: 12, fontWeight: 500 }}
                     axisLine={false} tickLine={false} width={90}
                   />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} trigger="hover" />
                   <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={22}>
                     {chartData.map((entry, idx) => (
                       <Cell key={idx} fill={entry.colorHex} fillOpacity={0.85} />
@@ -195,12 +185,11 @@ export default function SquadDepth() {
               </ResponsiveContainer>
             </div>
 
-            {/* Depth cards — player list from API player ID arrays */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <div style={{ width: 3, height: 18, background: ACC, borderRadius: 2 }} />
               <div style={{ fontFamily: 'Space Grotesk', fontSize: 15, fontWeight: 600 }}>Position Breakdown</div>
             </div>
-            <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               {POSITIONS.map(pos => (
                 <DepthCard
                   key={pos.key}
