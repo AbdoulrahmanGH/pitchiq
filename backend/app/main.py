@@ -7,7 +7,10 @@ app = FastAPI(title="PitchIQ API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://pitchiqdata.netlify.app",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
