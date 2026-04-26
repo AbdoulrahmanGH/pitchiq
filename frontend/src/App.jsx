@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import Players from './pages/Players';
 import Matches from './pages/Matches';
 import SquadDepth from './pages/SquadDepth';
+import About from './pages/About';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
             <Route path="/players" element={<Players />} />
             <Route path="/matches" element={<Matches />} />
             <Route path="/depth"   element={<SquadDepth />} />
+            <Route path="/about"   element={<About />} />
           </Routes>
         </div>
       </div>
