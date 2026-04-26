@@ -1,4 +1,4 @@
-const BASE = 'http://localhost:8000';
+const BASE = 'https://pitchiq-backend-787059661234.europe-west1.run.app';
 
 async function get(path) {
   const res = await fetch(`${BASE}${path}`);
