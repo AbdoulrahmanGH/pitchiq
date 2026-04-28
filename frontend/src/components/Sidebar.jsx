@@ -91,7 +91,7 @@ export default function Sidebar() {
           {!isMobile && (
             <div>
               <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 17, color: 'var(--orange)', letterSpacing: '0.04em' }}>PitchIQ</div>
-              <div style={{ fontSize: 9.5, color: 'var(--text-muted)', letterSpacing: '0.08em', marginTop: -1 }}>AL QADSIAH FC</div>
+              <div style={{ fontSize: 9.5, color: 'var(--text-muted)', letterSpacing: '0.08em', marginTop: -1 }}></div>
             </div>
           )}
         </div>
