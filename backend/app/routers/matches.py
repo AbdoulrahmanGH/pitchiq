@@ -1,67 +1,79 @@
 from fastapi import APIRouter
-from app.config import SUPABASE_URL, SUPABASE_KEY
-from supabase import create_client
+
+from app.db import get_db
+from app.services.fatigue import get_at_risk_players
 
 matches_router = APIRouter(prefix="/api/matches", tags=["matches"])
 team_router = APIRouter(prefix="/api/team", tags=["team"])
 
-def get_db():
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+# Scoped to our own squad, same as players.py.
+BARCELONA_TEAM_ID = 217
+
+
+def build_matches_response(matches_rows, team_stats_rows, team_names_by_id, our_team_id):
+    """matches_rows: schema_v2 matches rows (team-agnostic home/away/score).
+    team_stats_rows: team_match_stats rows for our_team_id only.
+    team_names_by_id: {team_id: name}, used to resolve the opponent's name.
+
+    Reshapes the team-agnostic match rows into v1's opponent-relative shape
+    (opponent/home_away_neutral/result/goals_scored/goals_conceded), and
+    actually includes stadium now -- the audit's #3 bug (never selected,
+    so the frontend's venue always fell back to a generic 'Home' string).
+    """
+    possession_by_match = {r["match_id"]: r["possession_pct"] for r in team_stats_rows}
+
+    result = []
+    for m in matches_rows:
+        is_home = m["home_team_id"] == our_team_id
+        opponent_id = m["away_team_id"] if is_home else m["home_team_id"]
+        goals_scored = m["home_score"] if is_home else m["away_score"]
+        goals_conceded = m["away_score"] if is_home else m["home_score"]
+        outcome = (
+            "win" if goals_scored > goals_conceded
+            else "draw" if goals_scored == goals_conceded
+            else "loss"
+        )
+        result.append({
+            "id": m["id"],
+            "date": m["date"],
+            "opponent": team_names_by_id.get(opponent_id, opponent_id),
+            "home_away_neutral": "home" if is_home else "away",
+            "result": outcome,
+            "goals_scored": goals_scored,
+            "goals_conceded": goals_conceded,
+            "stadium": m["stadium"],
+            "possession_pct": possession_by_match.get(m["id"]),
+        })
+    return result
+
+
+def build_readiness_response(at_risk_players):
+    score = max(0, 100 - (5 * len(at_risk_players)))
+    return {"readiness_score": score, "at_risk_players": at_risk_players}
 
 
 @matches_router.get("/summary")
 def get_matches_summary():
     supabase = get_db()
 
-    matches = supabase.table("matches").select(
-        "id, date, opponent, home_away_neutral, result, goals_scored, goals_conceded"
+    matches_rows = supabase.table("matches").select(
+        "id, date, home_team_id, away_team_id, home_score, away_score, stadium, match_week"
     ).execute().data
 
-    team_stats = supabase.table("team_match_stats").select(
-        "match_id, possession"
-    ).execute().data
+    team_ids = {m["home_team_id"] for m in matches_rows} | {m["away_team_id"] for m in matches_rows}
+    teams_rows = supabase.table("teams").select("id, name").in_("id", list(team_ids)).execute().data
+    team_names_by_id = {t["id"]: t["name"] for t in teams_rows}
 
-    possession_by_match = {row["match_id"]: row["possession"] for row in team_stats}
+    match_ids = [m["id"] for m in matches_rows]
+    team_stats_rows = supabase.table("team_match_stats").select(
+        "match_id, team_id, possession_pct"
+    ).eq("team_id", BARCELONA_TEAM_ID).in_("match_id", match_ids).execute().data
 
-    for match in matches:
-        match["possession"] = possession_by_match.get(match["id"])
-
-    return matches
+    return build_matches_response(matches_rows, team_stats_rows, team_names_by_id, BARCELONA_TEAM_ID)
 
 
 @team_router.get("/readiness")
 def get_team_readiness():
     supabase = get_db()
-
-    response = supabase.table("player_match_stats").select(
-        "player_id, minutes_played, sprints"
-    ).execute()
-
-    aggregated = {}
-    for row in response.data:
-        pid = row["player_id"]
-        if pid not in aggregated:
-            aggregated[pid] = {"total_minutes": 0, "sprints_list": [], "matches": 0}
-        aggregated[pid]["total_minutes"] += row["minutes_played"]
-        aggregated[pid]["sprints_list"].append(row["sprints"])
-        aggregated[pid]["matches"] += 1
-
-    at_risk = []
-    for pid, stats in aggregated.items():
-        avg_sprints = round(sum(stats["sprints_list"]) / stats["matches"], 2)
-        total_minutes = stats["total_minutes"]
-        reasons = []
-        if total_minutes > 400:
-            reasons.append(f"High workload — {total_minutes} minutes played")
-        if avg_sprints > 40:
-            reasons.append(f"High sprint load — averaging {int(avg_sprints)} sprints per match")
-        if reasons:
-            at_risk.append({
-                "player_id": pid,
-                "total_minutes": total_minutes,
-                "avg_sprints": avg_sprints,
-                "reason": "; ".join(reasons),
-            })
-
-    score = max(0, 100 - (5 * len(at_risk)))
-    return {"readiness_score": score, "at_risk_players": at_risk}
+    at_risk = get_at_risk_players(supabase, BARCELONA_TEAM_ID)
+    return build_readiness_response(at_risk)

@@ -181,6 +181,14 @@ def _transform_match(match, events, lineups, teams, players,
         if e["type"]["name"] == "Starting XI":
             for entry in e.get("tactics", {}).get("lineup", []):
                 positions[entry["player"]["id"]] = entry["position"]["name"]
+    # Substitutes never appear in a Starting XI lineup. Fall back to the
+    # `position` field StatsBomb attaches to any on-ball event, so a player
+    # who only ever came off the bench still gets a position.
+    for e in events:
+        pid = e.get("player", {}).get("id")
+        pos = e.get("position", {}).get("name")
+        if pid is not None and pos and pid not in positions:
+            positions[pid] = pos
 
     player_team = {}
     for team_lineup in lineups:

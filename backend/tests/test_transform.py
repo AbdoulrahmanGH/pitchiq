@@ -155,6 +155,9 @@ EVENTS_1 = [
        player=MESSI, possession=8,
        substitution={"outcome": {"id": 103, "name": "Tactical"},
                      "replacement": NEYMAR}),
+    ev(11, 17, "Pressure", BARCA, "00:20:00.000", 65, 0, period=2,
+       player=NEYMAR, location=[70.0, 30.0], possession=9,
+       position={"id": 21, "name": "Left Wing"}),
 ]
 
 LINEUPS_1 = [
@@ -291,6 +294,14 @@ def test_players_deduped_across_matches(result):
     assert row(players, id=5246)["name"] == "Luis Suarez"
 
 
+def test_substitute_position_falls_back_to_event_position(result):
+    # Neymar never appears in a Starting XI lineup in these fixtures -- his
+    # position must come from the `position` field StatsBomb attaches to the
+    # events he's involved in after coming on, not be left null.
+    p = row(result["players"], id=5211)
+    assert p["primary_position"] == "Left Wing"
+
+
 # --------------------------------- matches ----------------------------------
 
 def test_match_rows(result):
@@ -342,7 +353,9 @@ def test_substitute_gets_row_with_zero_counters(result):
     assert p["passes_attempted"] == 0
     assert p["shots"] == 0
     assert p["xg"] == pytest.approx(0.0)
-    assert p["pressures"] == 0
+    # Neymar's one fixture event (a Pressure, added for the position-fallback
+    # test below) is his only recorded action in this match.
+    assert p["pressures"] == 1
 
 
 def test_suarez_match2_defensive(result):
