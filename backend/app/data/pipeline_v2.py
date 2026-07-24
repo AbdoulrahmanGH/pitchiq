@@ -22,20 +22,32 @@ Metric definitions (confirmed against football-docs, see tests/test_transform.py
   default to 0.
 """
 
+import json
 import math
 import os
+import uuid
+from datetime import datetime, timezone
 
 import ijson
 import pandas as pd
 import requests
+from google.cloud import storage
 
 from app.data.load_v2 import load as load_to_supabase
+from app.data.quality_checks import assert_quality
+from app.db import get_db
 
 BASE_URL = "https://raw.githubusercontent.com/hudl/open-data/master/data"
 COMPETITION_ID = 11
 SEASON_ID = 27
 BARCELONA_TEAM_ID = 217
 MATCH_LIMIT = None  # None = process every Barcelona match in the competition/season
+
+# Raw-data landing zone. Every run lands the exact JSON it fetched from
+# StatsBomb here first, under a run-scoped prefix -- a durable, inspectable
+# record of what was actually ingested -- and transform() reads back from
+# here rather than consuming extract()'s in-memory return value directly.
+GCS_RAW_BUCKET = os.environ.get("STATSBOMB_RAW_BUCKET", "pitchiq-v2-statsbomb-raw")
 
 KEEP_EVENT_TYPES = {
     "Pass", "Shot", "Dribble", "Carry", "Pressure", "Duel", "Interception",
@@ -397,10 +409,66 @@ def transform(matches, events_by_match, lineups_by_match):
     }
 
 
+# ------------------------------- GCS landing --------------------------------
+
+def _run_prefix():
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"raw/{stamp}-{uuid.uuid4().hex[:8]}"
+
+
+def _upload_json(bucket, path, data):
+    bucket.blob(path).upload_from_string(json.dumps(data), content_type="application/json")
+
+
+def _download_json(bucket, path):
+    return json.loads(bucket.blob(path).download_as_text())
+
+
+def land_raw_data_in_gcs(matches, events_by_match, lineups_by_match,
+                         storage_client=None, bucket_name=GCS_RAW_BUCKET):
+    """Writes exactly what extract() fetched from StatsBomb to GCS, under a
+    run-scoped prefix so successive runs don't clobber each other's record.
+    """
+    client = storage_client or storage.Client()
+    bucket = client.bucket(bucket_name)
+    run_prefix = _run_prefix()
+
+    _upload_json(bucket, f"{run_prefix}/matches.json", matches)
+    for m in matches:
+        mid = m["match_id"]
+        _upload_json(bucket, f"{run_prefix}/events/{mid}.json", events_by_match[mid])
+        _upload_json(bucket, f"{run_prefix}/lineups/{mid}.json", lineups_by_match[mid])
+
+    print(f"Landed raw StatsBomb data for {len(matches)} matches in "
+          f"gs://{bucket_name}/{run_prefix}/")
+    return run_prefix
+
+
+def read_raw_from_gcs(run_prefix, storage_client=None, bucket_name=GCS_RAW_BUCKET):
+    """Reads back exactly what land_raw_data_in_gcs() just wrote. This is
+    transform()'s actual data source for a pipeline run -- not a fresh
+    GitHub fetch."""
+    client = storage_client or storage.Client()
+    bucket = client.bucket(bucket_name)
+
+    matches = _download_json(bucket, f"{run_prefix}/matches.json")
+    events_by_match, lineups_by_match = {}, {}
+    for m in matches:
+        mid = m["match_id"]
+        events_by_match[mid] = _download_json(bucket, f"{run_prefix}/events/{mid}.json")
+        lineups_by_match[mid] = _download_json(bucket, f"{run_prefix}/lineups/{mid}.json")
+
+    print(f"Read raw StatsBomb data for {len(matches)} matches back from "
+          f"gs://{bucket_name}/{run_prefix}/")
+    return matches, events_by_match, lineups_by_match
+
+
 # ----------------------------------- run ------------------------------------
 
 def run(write_csv=True, write_db=True):
     matches, events_by_match, lineups_by_match = extract()
+    run_prefix = land_raw_data_in_gcs(matches, events_by_match, lineups_by_match)
+    matches, events_by_match, lineups_by_match = read_raw_from_gcs(run_prefix)
     tables = transform(matches, events_by_match, lineups_by_match)
 
     if write_csv:
@@ -413,11 +481,16 @@ def run(write_csv=True, write_db=True):
             print(f"  {name}: {len(df)} rows -> {path}")
 
     if write_db:
+        db_client = get_db()
+
         print("\nLoading into Supabase...")
-        counts = load_to_supabase(tables)
+        counts = load_to_supabase(tables, client=db_client)
         print("Row counts (Supabase load):")
         for name, count in counts.items():
             print(f"  {name}: {count} rows")
+
+        print("\nRunning data quality checks...")
+        assert_quality(db_client, BARCELONA_TEAM_ID)
 
     return tables
 
