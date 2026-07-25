@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { getTeamReadiness, getMatchesSummary } from '../services/api';
+import { getTeamReadiness, getMatchesSummary, getSquadDepth } from '../services/api';
 import { PLAYER_POSITIONS, POS_ABBREV, POS_COLORS } from '../constants';
+
+const RECENT_MINUTES_MAX = 270; // 3 full 90-minute matches -- matches the "last 3 fixtures" workload window
 
 const ACC = '#FF6B35';
 
@@ -19,7 +21,7 @@ function CircularProgress({ value, size = 72, stroke = 5 }) {
           strokeDasharray={`${dash} ${circ}`}
           style={{ transition: 'stroke-dasharray 1.2s cubic-bezier(0.4,0,0.2,1)', filter: `drop-shadow(0 0 6px ${ACC}88)` }} />
       </svg>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 700, color: ACC }}>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 700, color: ACC, fontVariantNumeric: 'tabular-nums' }}>
         {value}%
       </div>
     </div>
@@ -38,7 +40,7 @@ function StatCard({ title, value, sub, children }) {
       <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: 14 }}>{title}</div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 42, fontWeight: 700, fontFamily: 'Space Grotesk', lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-1px' }}>{value}</div>
+          <div style={{ fontSize: 42, fontWeight: 700, fontFamily: 'Space Grotesk', lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-1px', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>{sub}</div>
         </div>
         {children}
@@ -84,17 +86,17 @@ function FatigueCard({ player }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <div style={{ display: 'flex', gap: 16 }}>
           <div>
-            <div style={{ fontSize: 9.5, color: '#8B949E', letterSpacing: '0.08em', marginBottom: 2 }}>TOTAL MINS</div>
-            <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: '#C9D1D9' }}>{player.total_minutes}</div>
+            <div style={{ fontSize: 9.5, color: '#8B949E', letterSpacing: '0.08em', marginBottom: 2 }}>REST DAYS</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: '#C9D1D9', fontVariantNumeric: 'tabular-nums' }}>{player.rest_days}</div>
           </div>
           <div>
-            <div style={{ fontSize: 9.5, color: '#8B949E', letterSpacing: '0.08em', marginBottom: 2 }}>AVG SPRINTS</div>
-            <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: '#C9D1D9' }}>{player.avg_sprints}</div>
+            <div style={{ fontSize: 9.5, color: '#8B949E', letterSpacing: '0.08em', marginBottom: 2 }}>RECENT MINS</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: '#C9D1D9', fontVariantNumeric: 'tabular-nums' }}>{player.recent_minutes}</div>
           </div>
         </div>
       </div>
       <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${Math.min((player.total_minutes / 450) * 100, 100)}%`, background: 'linear-gradient(90deg, var(--red), var(--red))', borderRadius: 2 }} />
+        <div style={{ height: '100%', width: `${Math.min((player.recent_minutes / RECENT_MINUTES_MAX) * 100, 100)}%`, background: 'linear-gradient(90deg, var(--red), var(--red))', borderRadius: 2 }} />
       </div>
     </div>
   );
@@ -122,27 +124,27 @@ function LastMatchCard({ match }) {
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
             Al Qadsiah <span style={{ color: 'var(--text-muted)', fontWeight: 400, margin: '0 6px' }}>vs</span> {match.opponent}
           </div>
-          <div style={{ fontFamily: 'Space Grotesk', fontSize: 52, fontWeight: 700, letterSpacing: '-2px', lineHeight: 1 }}>
+          <div style={{ fontFamily: 'Space Grotesk', fontSize: 52, fontWeight: 700, letterSpacing: '-2px', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
             <span style={{ color: match.result !== 'loss' ? 'var(--text-primary)' : 'rgba(230,237,243,0.5)' }}>{match.goals_scored}</span>
             <span style={{ color: 'var(--text-muted)', margin: '0 10px', fontWeight: 300, fontSize: 36 }}>–</span>
             <span style={{ color: match.result === 'loss' ? 'rgba(248,81,73,0.7)' : 'rgba(230,237,243,0.35)' }}>{match.goals_conceded}</span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, letterSpacing: '0.06em' }}>
-            {dateStr} · {isHome ? match.venue || 'Home' : 'Away'} · {isHome ? 'HOME' : 'AWAY'}
+            {dateStr} · {match.stadium || (isHome ? 'Home' : 'Away')} · {isHome ? 'HOME' : 'AWAY'}
           </div>
         </div>
-        {match.possession != null && (
+        {match.possession_pct != null && (
           <div style={{ padding: '12px 16px', background: 'rgba(0,0,0,0.2)', borderRadius: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <span style={{ fontSize: 9.5, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>POSSESSION</span>
-              <span style={{ fontFamily: 'Space Grotesk', fontSize: 14, fontWeight: 700, color: ACC }}>{match.possession}%</span>
+              <span style={{ fontFamily: 'Space Grotesk', fontSize: 14, fontWeight: 700, color: ACC, fontVariantNumeric: 'tabular-nums' }}>{match.possession_pct.toFixed(1)}%</span>
             </div>
             <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
-              <div style={{ width: `${match.possession}%`, height: '100%', background: ACC, borderRadius: 2 }} />
+              <div style={{ width: `${match.possession_pct}%`, height: '100%', background: ACC, borderRadius: 2 }} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
               <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>AQF</span>
-              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>OPP {(100 - match.possession).toFixed(1)}%</span>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>OPP {(100 - match.possession_pct).toFixed(1)}%</span>
             </div>
           </div>
         )}
@@ -159,7 +161,7 @@ function RecordDisplay({ matches }) {
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
       {[['W', wins, 'var(--green)'], ['D', draws, 'var(--yellow)'], ['L', losses, 'var(--red)']].map(([l, v, c]) => (
         <div key={l} style={{ textAlign: 'center', padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)', minWidth: 36 }}>
-          <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 18, color: c }}>{v}</div>
+          <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 18, color: c, fontVariantNumeric: 'tabular-nums' }}>{v}</div>
           <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{l}</div>
         </div>
       ))}
@@ -170,12 +172,13 @@ function RecordDisplay({ matches }) {
 export default function Dashboard() {
   const [readiness, setReadiness] = useState(null);
   const [matches,   setMatches]   = useState([]);
+  const [depth,     setDepth]     = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
 
   useEffect(() => {
-    Promise.all([getTeamReadiness(), getMatchesSummary()])
-      .then(([r, m]) => { setReadiness(r); setMatches(m); })
+    Promise.all([getTeamReadiness(), getMatchesSummary(), getSquadDepth()])
+      .then(([r, m, d]) => { setReadiness(r); setMatches(m); setDepth(d); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -201,7 +204,10 @@ export default function Dashboard() {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 40px', minWidth: 0 }}>
         {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-secondary)', fontSize: 14 }}>Loading...</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, height: 200, color: 'var(--text-secondary)', fontSize: 13 }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: ACC, animation: 'pulse 1.2s ease-in-out infinite' }} />
+            Loading squad data...
+          </div>
         )}
         {error && (
           <div style={{ padding: '16px 20px', background: 'var(--red-dim)', border: '1px solid rgba(248,81,73,0.2)', borderRadius: 12, color: 'var(--red)', fontSize: 13 }}>
@@ -214,7 +220,11 @@ export default function Dashboard() {
               <StatCard title="Squad Readiness" value={readiness?.readiness_score ?? '—'} sub="Overall squad fitness index">
                 <CircularProgress value={readiness?.readiness_score ?? 0} />
               </StatCard>
-              <StatCard title="Players Available" value="18/26" sub="Based on squad activity data" />
+              <StatCard
+                title="Players Available"
+                value={depth ? `${depth.total_players - (readiness?.at_risk_players?.length ?? 0)}/${depth.total_players}` : '—'}
+                sub="Squad total minus flagged fatigue risk"
+              />
               <StatCard title="Saudi Pro League" value={`${wins}W · ${draws}D · ${losses}L`} sub={`Last ${matches.length} matches · GF ${gf}  GA ${ga}`}>
                 <RecordDisplay matches={matches} />
               </StatCard>

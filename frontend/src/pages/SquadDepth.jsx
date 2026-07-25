@@ -39,7 +39,7 @@ function DepthCard({ pos, players, atRiskIds }) {
                 <div style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: 'rgba(248,81,73,0.1)', color: 'var(--red)', border: '1px solid rgba(248,81,73,0.2)' }}>⚠ LOW</div>
               )}
             </div>
-            <div style={{ fontFamily: 'Space Grotesk', fontSize: 28, fontWeight: 700, lineHeight: 1, color: pos.color, letterSpacing: '-0.5px' }}>{count}</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 28, fontWeight: 700, lineHeight: 1, color: pos.color, letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums' }}>{count}</div>
             <div style={{ fontSize: 10.5, color: '#8B949E', marginTop: 2 }}>{pos.plural.toLowerCase()} in squad</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
@@ -113,6 +113,9 @@ export default function SquadDepth() {
     count:    (depth[p.key] || []).length,
     colorHex: p.colorHex,
   })) : [];
+  // Scale to the real data instead of an arbitrary fixed max -- a squad
+  // with more than 12 in one position would otherwise render off-scale.
+  const chartMax = Math.max(12, ...chartData.map(d => d.count)) + 2;
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -132,7 +135,12 @@ export default function SquadDepth() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 48px', minWidth: 0 }}>
-        {loading && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: '#8B949E', fontSize: 14 }}>Loading...</div>}
+        {loading && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, height: 200, color: '#8B949E', fontSize: 13 }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: ACC, animation: 'pulse 1.2s ease-in-out infinite' }} />
+            Loading squad depth...
+          </div>
+        )}
         {error   && <div style={{ padding: '16px 20px', background: 'var(--red-dim)', border: '1px solid rgba(248,81,73,0.2)', borderRadius: 12, color: 'var(--red)', fontSize: 13 }}>Failed to load: {error}</div>}
 
         {!loading && !error && depth && (
@@ -146,7 +154,7 @@ export default function SquadDepth() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                       <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 4, background: pos.dim, color: pos.color }}>{pos.abbr}</div>
                     </div>
-                    <div style={{ fontFamily: 'Space Grotesk', fontSize: 38, fontWeight: 700, lineHeight: 1, color: pos.color, letterSpacing: '-1px' }}>{ids.length}</div>
+                    <div style={{ fontFamily: 'Space Grotesk', fontSize: 38, fontWeight: 700, lineHeight: 1, color: pos.color, letterSpacing: '-1px', fontVariantNumeric: 'tabular-nums' }}>{ids.length}</div>
                     <div style={{ fontSize: 11, color: '#8B949E', marginTop: 6 }}>{pos.plural} available</div>
                   </div>
                 );
@@ -164,7 +172,7 @@ export default function SquadDepth() {
               <ResponsiveContainer width="100%" height={160}>
                 <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 60, top: 0, bottom: 0 }} barCategoryGap={16} defaultIndex={undefined}>
                   <XAxis
-                    type="number" domain={[0, 12]}
+                    type="number" domain={[0, chartMax]}
                     tick={{ fill: '#6E7681', fontSize: 10 }}
                     axisLine={false} tickLine={false}
                   />

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { getPlayerPerformance, getFatigueRisk } from '../services/api';
-import { PLAYER_POSITIONS, POS_ABBREV, POS_COLORS } from '../constants';
+import { getPlayerPerformance, getFatigueRisk, getSquadDepth } from '../services/api';
+import { POS_ABBREV, POS_COLORS } from '../constants';
 
 const ACC = '#FF6B35';
 const POS_MAP = { GK: 'Goalkeeper', DEF: 'Defender', MID: 'Midfielder', FWD: 'Forward' };
@@ -38,7 +38,7 @@ function PosBadge({ pos }) {
 function MiniBar({ value, max, color }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-      <span style={{ fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 12, color: 'var(--text-primary)', minWidth: 24, textAlign: 'right' }}>{value}</span>
+      <span style={{ fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 12, color: 'var(--text-primary)', minWidth: 24, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
       <div style={{ width: 28, height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, flexShrink: 0 }}>
         <div style={{ width: `${Math.min((value / max) * 100, 100)}%`, height: '100%', background: color, borderRadius: 2 }} />
       </div>
@@ -59,7 +59,7 @@ function SortIcon({ dir }) {
   );
 }
 
-const NUM = { fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' };
+const NUM = { fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' };
 
 function TableRow({ player, acc, maxShots, maxPasses }) {
   const [hov, setHov] = useState(false);
@@ -93,11 +93,11 @@ function TableRow({ player, acc, maxShots, maxPasses }) {
       <div className="col-hide-mobile" style={{ width: 60, flexShrink: 0, textAlign: 'center', ...NUM }}>{player.total_minutes}</div>
 
       <div style={{ width: 60, flexShrink: 0, textAlign: 'center' }}>
-        <span style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: player.total_goals > 0 ? acc : 'var(--text-muted)' }}>{player.total_goals}</span>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: player.total_goals > 0 ? acc : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{player.total_goals}</span>
       </div>
 
       <div style={{ width: 70, flexShrink: 0, textAlign: 'center' }}>
-        <span style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: player.total_assists > 0 ? 'var(--blue)' : 'var(--text-muted)' }}>{player.total_assists}</span>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: player.total_assists > 0 ? 'var(--blue)' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{player.total_assists}</span>
       </div>
 
       <div className="col-hide-mobile" style={{ width: 60, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
@@ -113,21 +113,21 @@ function TableRow({ player, acc, maxShots, maxPasses }) {
       <div className="col-hide-mobile" style={{ width: 75, flexShrink: 0, textAlign: 'center', ...NUM }}>{player.total_sprints}</div>
 
       <div style={{ width: 55, flexShrink: 0, textAlign: 'center' }}>
-        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.total_expected_goals > 0.3 ? '#58A6FF' : 'var(--text-secondary)' }}>{player.total_expected_goals}</span>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.total_expected_goals > 0.3 ? '#58A6FF' : 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{player.total_expected_goals}</span>
       </div>
 
       <div className="col-hide-mobile" style={{ width: 55, flexShrink: 0, textAlign: 'center' }}>
-        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.total_expected_assists > 0.2 ? 'var(--purple)' : 'var(--text-secondary)' }}>{player.total_expected_assists}</span>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.total_expected_assists > 0.2 ? 'var(--purple)' : 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{player.total_expected_assists}</span>
       </div>
 
       <div className="col-hide-mobile" style={{ width: 75, flexShrink: 0, textAlign: 'center', ...NUM }}>{player.total_key_passes}</div>
 
       <div className="col-hide-mobile" style={{ width: 70, flexShrink: 0, textAlign: 'center' }}>
-        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.total_tackles > 15 ? 'var(--green)' : 'var(--text-secondary)' }}>{player.total_tackles}</span>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.total_tackles > 15 ? 'var(--green)' : 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{player.total_tackles}</span>
       </div>
 
       <div className="col-hide-mobile" style={{ width: 80, flexShrink: 0, textAlign: 'center' }}>
-        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.dribble_success_rate >= 70 ? 'var(--green)' : player.dribble_success_rate >= 50 ? acc : 'var(--text-muted)' }}>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.dribble_success_rate >= 70 ? 'var(--green)' : player.dribble_success_rate >= 50 ? acc : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
           {player.dribble_success_rate > 0 ? `${player.dribble_success_rate}%` : '—'}
         </span>
       </div>
@@ -150,31 +150,51 @@ function TableRow({ player, acc, maxShots, maxPasses }) {
 export default function Players() {
   const [performance, setPerformance] = useState([]);
   const [fatigueRisk, setFatigueRisk] = useState([]);
+  const [depth, setDepth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
   const [filterPos, setFilterPos] = useState('ALL');
+  const [search, setSearch] = useState('');
   const [sortKey,   setSortKey]   = useState('total_goals');
   const [sortDir,   setSortDir]   = useState('desc');
 
   useEffect(() => {
-    Promise.all([getPlayerPerformance(), getFatigueRisk()])
-      .then(([perf, risk]) => { setPerformance(perf); setFatigueRisk(risk); })
+    Promise.all([getPlayerPerformance(), getFatigueRisk(), getSquadDepth()])
+      .then(([perf, risk, d]) => { setPerformance(perf); setFatigueRisk(risk); setDepth(d); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
 
   const atRiskIds = useMemo(() => new Set(fatigueRisk.map(p => p.player_id)), [fatigueRisk]);
 
+  // Real position per player, from /api/players/depth's buckets -- not the
+  // stale frontend-only PLAYER_POSITIONS map, which used v1's string ids
+  // ("player-013") and never matches real StatsBomb integer ids.
+  const positionByPlayerId = useMemo(() => {
+    const map = {};
+    if (!depth) return map;
+    for (const bucket of ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']) {
+      for (const p of depth[bucket] || []) map[p.id] = bucket;
+    }
+    return map;
+  }, [depth]);
+
   const players = useMemo(() => performance.map(p => ({
     ...p,
-    pos:  POS_ABBREV[PLAYER_POSITIONS[p.player_id]] || '???',
+    pos:  POS_ABBREV[positionByPlayerId[p.player_id]] || '???',
     status: atRiskIds.has(p.player_id) ? 'AT RISK' : 'FIT',
-  })), [performance, atRiskIds]);
+  })), [performance, atRiskIds, positionByPlayerId]);
 
-  const filtered = useMemo(() =>
-    filterPos === 'ALL' ? players : players.filter(p => PLAYER_POSITIONS[p.player_id] === POS_MAP[filterPos]),
-    [players, filterPos]
-  );
+  const filtered = useMemo(() => {
+    let result = filterPos === 'ALL'
+      ? players
+      : players.filter(p => positionByPlayerId[p.player_id] === POS_MAP[filterPos]);
+
+    const query = search.trim().toLowerCase();
+    if (query) result = result.filter(p => p.name?.toLowerCase().includes(query));
+
+    return result;
+  }, [players, filterPos, search, positionByPlayerId]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -242,7 +262,25 @@ export default function Players() {
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Player Performance</div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Saudi Pro League 2025/26 · {players.length} Players</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: '8px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 0' }}>
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              className="search-input"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search players..."
+              style={{
+                width: 180, padding: '7px 12px 7px 30px', fontSize: 12,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: 7, color: 'var(--text-primary)', outline: 'none',
+              }}
+            />
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+              <circle cx="5.5" cy="5.5" r="4.2" stroke="#8B949E" strokeWidth="1.3" />
+              <line x1="8.6" y1="8.6" x2="12" y2="12" stroke="#8B949E" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </div>
           {['ALL', 'GK', 'DEF', 'MID', 'FWD'].map(p => {
             const m = POS_COLORS[p] || {};
             const isActive = filterPos === p;
@@ -261,7 +299,12 @@ export default function Players() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'visible', padding: '20px 20px 40px', minWidth: 0 }}>
-        {loading && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-secondary)', fontSize: 14 }}>Loading...</div>}
+        {loading && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, height: 200, color: 'var(--text-secondary)', fontSize: 13 }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: ACC, animation: 'pulse 1.2s ease-in-out infinite' }} />
+            Loading player performance...
+          </div>
+        )}
         {error   && <div style={{ padding: '16px 20px', background: 'var(--red-dim)', border: '1px solid rgba(248,81,73,0.2)', borderRadius: 12, color: 'var(--red)', fontSize: 13 }}>Failed to load: {error}</div>}
 
         {!loading && !error && (
@@ -275,7 +318,7 @@ export default function Players() {
                 <div key={label} style={{ flex: '1 1 160px', background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
                   <div style={{ position: 'absolute', top: -20, right: -20, width: 70, height: 70, borderRadius: '50%', background: `radial-gradient(circle, ${color}18 0%, transparent 70%)`, pointerEvents: 'none' }} />
                   <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: 8 }}>{label}</div>
-                  <div style={{ fontFamily: 'Space Grotesk', fontSize: 36, fontWeight: 700, lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-1px' }}>{value}</div>
+                  <div style={{ fontFamily: 'Space Grotesk', fontSize: 36, fontWeight: 700, lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-1px', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
                   <div style={{ marginTop: 10, height: 2, background: 'rgba(255,255,255,0.05)', borderRadius: 1 }}>
                     <div style={{ height: '100%', width: '60%', background: `linear-gradient(90deg, transparent, ${color})`, borderRadius: 1 }} />
                   </div>
@@ -336,7 +379,11 @@ export default function Players() {
                       ))}
                     </div>
 
-                    {sorted.map(p => (
+                    {sorted.length === 0 ? (
+                      <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+                        No players match {search ? `"${search}"` : 'this filter'}.
+                      </div>
+                    ) : sorted.map(p => (
                       <TableRow key={p.player_id} player={p} acc={ACC} maxShots={maxShots} maxPasses={maxPasses} />
                     ))}
 
