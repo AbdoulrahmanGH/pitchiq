@@ -107,8 +107,9 @@ MATCH_2 = {
 # ---------------------------------------------------------------------------
 # Match 1: attacking metrics. Hand-computed expectations:
 #   Messi:  1/1 passes, 1 key pass, 1 progressive pass (50->85 on x, 35 yd =
-#           32.0m closer to goal, spanning halves, >= 15m), xa 0.5,
-#           1/1 dribbles, subbed off at 60 -> 60 minutes.
+#           32.0m closer to goal, spanning halves, >= 15m), xa 0.5, 1 assist
+#           (the pass is both shot_assist and goal_assist -- Suarez's shot
+#           from it was a Goal), 1/1 dribbles, subbed off at 60 -> 60 minutes.
 #   Suarez: 2 shots, 1 goal, xg 0.5 + 0.2 = 0.7, 1 progressive carry
 #           (50->85, same rule as the pass), 90 minutes.
 #   Neymar: on at 60 -> 30 minutes, all counters 0.
@@ -125,7 +126,8 @@ EVENTS_1 = [
        **{"pass": {"recipient": SUAREZ, "length": 35.0, "angle": 0.0,
                    "height": {"id": 1, "name": "Ground Pass"},
                    "end_location": [85.0, 40.0],
-                   "shot_assist": True, "assisted_shot_id": "shot-1"}}),
+                   "shot_assist": True, "goal_assist": True,
+                   "assisted_shot_id": "shot-1"}}),
     ev(4, 16, "Shot", BARCA, "00:10:04.000", 10, 4, player=SUAREZ,
        location=[108.0, 40.0], possession=2, id="shot-1",
        shot={"statsbomb_xg": 0.5, "end_location": [120.0, 40.0, 0.5],
@@ -329,6 +331,7 @@ def test_messi_match1(result):
     assert p["key_passes"] == 1
     assert p["progressive_passes"] == 1
     assert p["xa"] == pytest.approx(0.5)
+    assert p["assists"] == 1
     assert p["dribbles_attempted"] == 1
     assert p["dribbles_completed"] == 1
     assert p["shots"] == 0
@@ -343,6 +346,7 @@ def test_suarez_match1(result):
     assert p["goals"] == 1
     assert p["xg"] == pytest.approx(0.7)
     assert p["xa"] == pytest.approx(0.0)
+    assert p["assists"] == 0
     assert p["progressive_carries"] == 1
     assert p["progressive_passes"] == 0
 

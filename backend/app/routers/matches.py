@@ -53,6 +53,19 @@ def build_readiness_response(at_risk_players):
     return {"readiness_score": score, "at_risk_players": at_risk_players}
 
 
+def build_team_info_response(team_name, competition_name, season_name):
+    """Real values for what used to be hardcoded on the frontend (team name,
+    league, season) -- team_name from the teams table, competition/season
+    from any matches row since every match this squad plays is in the same
+    competition/season.
+    """
+    return {
+        "team_name": team_name,
+        "competition_name": competition_name,
+        "season_name": season_name,
+    }
+
+
 @matches_router.get("/summary")
 def get_matches_summary(_user: AuthenticatedUser = Depends(get_current_user)):
     supabase = get_db()
@@ -78,3 +91,21 @@ def get_team_readiness(_user: AuthenticatedUser = Depends(get_current_user)):
     supabase = get_db()
     at_risk = get_at_risk_players(supabase, BARCELONA_TEAM_ID)
     return build_readiness_response(at_risk)
+
+
+@team_router.get("/info")
+def get_team_info(_user: AuthenticatedUser = Depends(get_current_user)):
+    supabase = get_db()
+
+    team_rows = supabase.table("teams").select("id, name").eq(
+        "id", BARCELONA_TEAM_ID
+    ).execute().data
+    team_name = team_rows[0]["name"] if team_rows else None
+
+    match_rows = supabase.table("matches").select(
+        "competition_name, season_name"
+    ).limit(1).execute().data
+    competition_name = match_rows[0]["competition_name"] if match_rows else None
+    season_name = match_rows[0]["season_name"] if match_rows else None
+
+    return build_team_info_response(team_name, competition_name, season_name)

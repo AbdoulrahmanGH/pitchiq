@@ -46,6 +46,7 @@ create table player_match_stats (
   progressive_passes integer not null default 0,
   shots integer not null default 0,
   goals integer not null default 0,
+  assists integer not null default 0,
   xg real not null default 0,
   xa real not null default 0,
   dribbles_attempted integer not null default 0,

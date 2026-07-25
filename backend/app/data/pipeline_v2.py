@@ -7,6 +7,9 @@ Metric definitions (confirmed against football-docs, see tests/test_transform.py
 - StatsBomb pitch is 120x80 yards; the acting team always attacks toward x=120.
 - xG is read from shot.statsbomb_xg, xA is the xG of shots assisted by a
   player's passes (pass.assisted_shot_id).
+- assists counts pass.goal_assist == True only (the shot from that pass was
+  a goal) -- narrower than key_passes/xa, which also count shot_assist
+  passes whose shot never went in.
 - PPDA = opponent passes attempted in the pressing zone / pressing team's
   tackles + interceptions + fouls committed in that zone. The zone starts 40%
   of pitch length from the pressing team's own goal: pressing-team actions at
@@ -149,7 +152,7 @@ def _new_player_stat(match_id, player_id, team_id, position):
         "match_id": match_id, "player_id": player_id, "team_id": team_id,
         "position": position, "minutes_played": 0,
         "passes_attempted": 0, "passes_completed": 0, "key_passes": 0,
-        "progressive_passes": 0, "shots": 0, "goals": 0,
+        "progressive_passes": 0, "shots": 0, "goals": 0, "assists": 0,
         "xg": 0.0, "xa": 0.0,
         "dribbles_attempted": 0, "dribbles_completed": 0,
         "progressive_carries": 0, "tackles": 0, "interceptions": 0,
@@ -269,6 +272,8 @@ def _transform_match(match, events, lineups, teams, players,
             if pas.get("shot_assist") or pas.get("goal_assist"):
                 ps["key_passes"] += 1
                 ps["xa"] += shot_xg_by_id.get(pas.get("assisted_shot_id"), 0.0)
+            if pas.get("goal_assist"):
+                ps["assists"] += 1
                 match_events.append({
                     "match_id": match_id, "player_id": pid, "team_id": team_id,
                     "event_type": "Pass", "minute": e["minute"],

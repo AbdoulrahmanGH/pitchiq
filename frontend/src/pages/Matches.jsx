@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getMatchesSummary } from '../services/api';
+import { getMatchesSummary, getTeamInfo } from '../services/api';
+import Skeleton from '../components/Skeleton';
 
 const ACC = '#FF6B35';
 
@@ -15,31 +16,31 @@ function formatDate(dateStr) {
   return `${months[parseInt(month, 10) - 1]} ${day}`;
 }
 
-function PossessionBar({ pct, color }) {
+function PossessionBar({ pct, color, teamName }) {
   const opp = (100 - pct).toFixed(1);
   return (
     <div style={{ width: 160, flexShrink: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
         <span style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>POSSESSION</span>
-        <span style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color }}>{pct}%</span>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color }}>{pct.toFixed(1)}%</span>
       </div>
       <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: '2px 0 0 2px', transition: 'width 0.8s ease' }} />
         <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)' }} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-        <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>AQF</span>
+        <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{teamName}</span>
         <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>OPP {opp}%</span>
       </div>
     </div>
   );
 }
 
-function MatchCard({ match }) {
+function MatchCard({ match, teamName }) {
   const [hov, setHov] = useState(false);
   const res = RES_MAP[match.result] || RES_MAP.draw;
   const isHome = match.home_away_neutral === 'home';
-  const venue = isHome ? (match.venue || 'Home') : 'Away';
+  const venue = isHome ? (match.stadium || 'Home') : 'Away';
 
   return (
     <div
@@ -69,8 +70,8 @@ function MatchCard({ match }) {
 
       <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
         <div style={{ flex: 1, textAlign: 'right', paddingRight: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Al Qadsiah</div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Al Qadsiah FC</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{teamName}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{isHome ? 'HOME' : 'AWAY'}</div>
         </div>
 
         <div style={{ flexShrink: 0, textAlign: 'center' }}>
@@ -98,8 +99,8 @@ function MatchCard({ match }) {
 
       <div style={{ width: 1, height: 56, background: 'rgba(255,255,255,0.05)', margin: '0 24px', flexShrink: 0 }} />
 
-      {match.possession != null
-        ? <PossessionBar pct={match.possession} color={res.color} />
+      {match.possession_pct != null
+        ? <PossessionBar pct={match.possession_pct} color={res.color} teamName={teamName} />
         : <div style={{ width: 160, flexShrink: 0, textAlign: 'center', fontSize: 11, color: '#8B949E' }}>No data</div>
       }
     </div>
@@ -107,16 +108,20 @@ function MatchCard({ match }) {
 }
 
 export default function Matches() {
-  const [matches, setMatches] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
+  const [matches,  setMatches]  = useState([]);
+  const [teamInfo, setTeamInfo] = useState(null);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState(null);
 
   useEffect(() => {
-    getMatchesSummary()
-      .then(setMatches)
+    Promise.all([getMatchesSummary(), getTeamInfo()])
+      .then(([m, t]) => { setMatches(m); setTeamInfo(t); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const teamName = teamInfo?.team_name ?? '—';
+  const leagueLabel = teamInfo ? `${teamInfo.competition_name} ${teamInfo.season_name}` : '';
 
   const sorted = [...matches].sort((a, b) => new Date(b.date) - new Date(a.date));
   const wins   = matches.filter(m => m.result === 'win').length;
@@ -126,7 +131,7 @@ export default function Matches() {
   const ga = matches.reduce((s, m) => s + m.goals_conceded, 0);
 
   const summaryCards = [
-    { label: 'Matches Played', value: String(matches.length), color: ACC,             sub: 'SPL 2025/26' },
+    { label: 'Matches Played', value: String(matches.length), color: ACC,             sub: leagueLabel },
     { label: 'Wins',           value: String(wins),           color: 'var(--green)',  sub: `${wins * 3} points` },
     { label: 'Draws',          value: String(draws),          color: 'var(--yellow)', sub: `${draws} point${draws !== 1 ? 's' : ''}` },
     { label: 'Losses',         value: String(losses),         color: 'var(--red)',    sub: `Goals ${gf}–${ga}` },
@@ -137,7 +142,7 @@ export default function Matches() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '0 20px', minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Match History</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Saudi Pro League 2025/26</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{leagueLabel}</div>
         </div>
         {matches.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -153,7 +158,21 @@ export default function Matches() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 48px', minWidth: 0 }}>
-        {loading && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-secondary)', fontSize: 14 }}>Loading...</div>}
+        {loading && (
+          <>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '20px 24px' }}>
+                  <Skeleton width={90} height={10.5} style={{ marginBottom: 12 }} />
+                  <Skeleton width={60} height={44} />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[0, 1, 2, 3, 4].map(i => <Skeleton key={i} height={100} radius={16} />)}
+            </div>
+          </>
+        )}
         {error   && <div style={{ padding: '16px 20px', background: 'var(--red-dim)', border: '1px solid rgba(248,81,73,0.2)', borderRadius: 12, color: 'var(--red)', fontSize: 13 }}>Failed to load: {error}</div>}
 
         {!loading && !error && (
@@ -176,11 +195,11 @@ export default function Matches() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {sorted.map(m => <MatchCard key={m.id} match={m} />)}
+              {sorted.map(m => <MatchCard key={m.id} match={m} teamName={teamName} />)}
             </div>
 
             <div style={{ marginTop: 20, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
-              Saudi Pro League 2025/26
+              {leagueLabel}
             </div>
           </>
         )}

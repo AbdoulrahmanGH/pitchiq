@@ -10,7 +10,11 @@ const NAV = [
   { path: '/about',   emoji: '📖', label: 'About'       },
 ];
 
-const LOGIN_ITEM = { path: '/login', emoji: '🔐', label: 'Login' };
+const ROLE_LABELS = {
+  analyst: { label: 'Analyst', sub: 'Performance Staff' },
+  coach:   { label: 'Coach',   sub: 'Coaching Staff'    },
+  scout:   { label: 'Scout',   sub: 'Recruitment'       },
+};
 
 // Nav visibility by role -- kept here rather than per-page route guards,
 // since this step is only about which links show, not blocking direct
@@ -23,10 +27,9 @@ const NAV_PATHS_BY_ROLE = {
 
 function navForRole(role) {
   const allowedPaths = NAV_PATHS_BY_ROLE[role];
-  // Role not resolved yet (e.g. on /login before signing in) -- show
-  // everything rather than guessing.
-  const items = allowedPaths ? NAV.filter(n => allowedPaths.includes(n.path)) : NAV;
-  return [...items, LOGIN_ITEM];
+  // Role not resolved yet (e.g. right after sign-in, before /whoami
+  // returns) -- show everything rather than guessing.
+  return allowedPaths ? NAV.filter(n => allowedPaths.includes(n.path)) : NAV;
 }
 
 function useMobile() {
@@ -73,6 +76,51 @@ function NavItem({ path, emoji, label, collapsed }) {
         </div>
       )}
     </NavLink>
+  );
+}
+
+function SidebarFooter() {
+  const { session, role, signOut } = useAuth();
+
+  if (!session) {
+    return (
+      <div style={{ marginTop: 'auto', padding: '20px 6px 24px' }}>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 14 }}>
+          <NavLink to="/login" style={{ fontSize: 12, fontWeight: 600, color: 'var(--orange)', textDecoration: 'none' }}>
+            Log in
+          </NavLink>
+        </div>
+      </div>
+    );
+  }
+
+  const roleInfo = ROLE_LABELS[role] || { label: role || 'Signed in', sub: '' };
+
+  return (
+    <div style={{ marginTop: 'auto', padding: '20px 6px 24px' }}>
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <circle cx="6" cy="4.5" r="2.5" fill="var(--text-muted)" />
+              <path d="M1 11c0-2.761 2.239-4 5-4s5 1.239 5 4" stroke="var(--text-muted)" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--text-secondary)' }}>{roleInfo.label}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={session.user.email}>
+              {session.user.email}
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={signOut}
+          style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', color: 'var(--orange)', fontSize: 11, fontWeight: 600, cursor: 'pointer', padding: 0 }}
+        >
+          Log out
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -128,24 +176,7 @@ export default function Sidebar() {
         {nav.map(n => <NavItem key={n.path} {...n} collapsed={isMobile} />)}
       </div>
 
-      {!isMobile && (
-        <div style={{ marginTop: 'auto', padding: '20px 6px 24px' }}>
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <circle cx="6" cy="4.5" r="2.5" fill="var(--text-muted)" />
-                  <path d="M1 11c0-2.761 2.239-4 5-4s5 1.239 5 4" stroke="var(--text-muted)" strokeWidth="1.2" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div>
-                <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--text-secondary)' }}>Analyst</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Performance Staff</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {!isMobile && <SidebarFooter />}
     </div>
   );
 }

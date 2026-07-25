@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { getPlayerPerformance, getFatigueRisk, getSquadDepth } from '../services/api';
+import { getPlayerPerformance, getFatigueRisk, getSquadDepth, getTeamInfo } from '../services/api';
 import { POS_ABBREV, POS_COLORS } from '../constants';
+import Skeleton from '../components/Skeleton';
 
 const ACC = '#FF6B35';
 const POS_MAP = { GK: 'Goalkeeper', DEF: 'Defender', MID: 'Midfielder', FWD: 'Forward' };
@@ -13,11 +14,9 @@ const COLUMNS = [
   { key: 'total_goals',            label: 'Goals',     w: 60,  center: true  },
   { key: 'total_assists',          label: 'Assists',   w: 70,  center: true  },
   { key: 'total_shots',            label: 'Shots',     w: 60,  center: true,  hideMobile: true },
-  { key: 'total_passes',           label: 'Passes',    w: 70,  center: true,  hideMobile: true },
-  { key: 'avg_distance',           label: 'Avg Dist',  w: 80,  center: true,  hideMobile: true },
-  { key: 'total_sprints',          label: 'Sprints',   w: 75,  center: true,  hideMobile: true },
-  { key: 'total_expected_goals',   label: 'xG',        w: 55,  center: true  },
-  { key: 'total_expected_assists', label: 'xA',        w: 55,  center: true,  hideMobile: true },
+  { key: 'total_passes_attempted', label: 'Passes',    w: 70,  center: true,  hideMobile: true },
+  { key: 'xg',                     label: 'xG',        w: 55,  center: true  },
+  { key: 'xa',                     label: 'xA',        w: 55,  center: true,  hideMobile: true },
   { key: 'total_key_passes',       label: 'Key Pass',  w: 75,  center: true,  hideMobile: true },
   { key: 'total_tackles',          label: 'Tackles',   w: 70,  center: true,  hideMobile: true },
   { key: 'dribble_success_rate',   label: 'Dribble %', w: 80,  center: true,  hideMobile: true },
@@ -105,19 +104,15 @@ function TableRow({ player, acc, maxShots, maxPasses }) {
       </div>
 
       <div className="col-hide-mobile" style={{ width: 70, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
-        <MiniBar value={player.total_passes} max={maxPasses} color="var(--purple)" />
+        <MiniBar value={player.total_passes_attempted} max={maxPasses} color="var(--purple)" />
       </div>
 
-      <div className="col-hide-mobile" style={{ width: 80, flexShrink: 0, textAlign: 'center', ...NUM }}>{player.avg_distance}km</div>
-
-      <div className="col-hide-mobile" style={{ width: 75, flexShrink: 0, textAlign: 'center', ...NUM }}>{player.total_sprints}</div>
-
       <div style={{ width: 55, flexShrink: 0, textAlign: 'center' }}>
-        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.total_expected_goals > 0.3 ? '#58A6FF' : 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{player.total_expected_goals}</span>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.xg > 0.3 ? '#58A6FF' : 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{player.xg}</span>
       </div>
 
       <div className="col-hide-mobile" style={{ width: 55, flexShrink: 0, textAlign: 'center' }}>
-        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.total_expected_assists > 0.2 ? 'var(--purple)' : 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{player.total_expected_assists}</span>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.xa > 0.2 ? 'var(--purple)' : 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{player.xa}</span>
       </div>
 
       <div className="col-hide-mobile" style={{ width: 75, flexShrink: 0, textAlign: 'center', ...NUM }}>{player.total_key_passes}</div>
@@ -151,6 +146,7 @@ export default function Players() {
   const [performance, setPerformance] = useState([]);
   const [fatigueRisk, setFatigueRisk] = useState([]);
   const [depth, setDepth] = useState(null);
+  const [teamInfo, setTeamInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
   const [filterPos, setFilterPos] = useState('ALL');
@@ -159,11 +155,13 @@ export default function Players() {
   const [sortDir,   setSortDir]   = useState('desc');
 
   useEffect(() => {
-    Promise.all([getPlayerPerformance(), getFatigueRisk(), getSquadDepth()])
-      .then(([perf, risk, d]) => { setPerformance(perf); setFatigueRisk(risk); setDepth(d); })
+    Promise.all([getPlayerPerformance(), getFatigueRisk(), getSquadDepth(), getTeamInfo()])
+      .then(([perf, risk, d, t]) => { setPerformance(perf); setFatigueRisk(risk); setDepth(d); setTeamInfo(t); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const leagueLabel = teamInfo ? `${teamInfo.competition_name} ${teamInfo.season_name}` : '';
 
   const atRiskIds = useMemo(() => new Set(fatigueRisk.map(p => p.player_id)), [fatigueRisk]);
 
@@ -210,7 +208,7 @@ export default function Players() {
   };
 
   const maxShots  = Math.max(1, ...players.map(p => p.total_shots));
-  const maxPasses = Math.max(1, ...players.map(p => p.total_passes));
+  const maxPasses = Math.max(1, ...players.map(p => p.total_passes_attempted));
 
   const scrollRef  = useRef(null);
   const hintShown  = useRef(false);
@@ -253,14 +251,14 @@ export default function Players() {
 
   const totalGoals   = players.reduce((s, p) => s + p.total_goals, 0);
   const totalAssists = players.reduce((s, p) => s + p.total_assists, 0);
-  const avgDist = players.length ? (players.reduce((s, p) => s + p.avg_distance, 0) / players.length).toFixed(1) : 0;
+  const totalXg = players.reduce((s, p) => s + (p.xg || 0), 0).toFixed(1);
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '0 20px', minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
         <div style={{ padding: '8px 0' }}>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Player Performance</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Saudi Pro League 2025/26 · {players.length} Players</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{leagueLabel} · {players.length} Players</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 0' }}>
           <div style={{ position: 'relative' }}>
@@ -300,10 +298,21 @@ export default function Players() {
 
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'visible', padding: '20px 20px 40px', minWidth: 0 }}>
         {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, height: 200, color: 'var(--text-secondary)', fontSize: 13 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: ACC, animation: 'pulse 1.2s ease-in-out infinite' }} />
-            Loading player performance...
-          </div>
+          <>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{ flex: '1 1 160px', background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px' }}>
+                  <Skeleton width={110} height={10.5} style={{ marginBottom: 12 }} />
+                  <Skeleton width={70} height={36} />
+                </div>
+              ))}
+            </div>
+            <div style={{ borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', padding: 16 }}>
+              {[0, 1, 2, 3, 4, 5, 6, 7].map(i => (
+                <Skeleton key={i} height={40} style={{ marginBottom: i === 7 ? 0 : 10 }} />
+              ))}
+            </div>
+          </>
         )}
         {error   && <div style={{ padding: '16px 20px', background: 'var(--red-dim)', border: '1px solid rgba(248,81,73,0.2)', borderRadius: 12, color: 'var(--red)', fontSize: 13 }}>Failed to load: {error}</div>}
 
@@ -311,9 +320,9 @@ export default function Players() {
           <>
             <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
               {[
-                { label: 'Total Goals',         value: totalGoals,     color: ACC            },
-                { label: 'Total Assists',        value: totalAssists,   color: 'var(--blue)'  },
-                { label: 'Avg Distance / Match', value: `${avgDist}km`, color: 'var(--green)' },
+                { label: 'Total Goals',   value: totalGoals,   color: ACC            },
+                { label: 'Total Assists', value: totalAssists, color: 'var(--blue)'  },
+                { label: 'Total xG',      value: totalXg,      color: 'var(--green)' },
               ].map(({ label, value, color }) => (
                 <div key={label} style={{ flex: '1 1 160px', background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
                   <div style={{ position: 'absolute', top: -20, right: -20, width: 70, height: 70, borderRadius: '50%', background: `radial-gradient(circle, ${color}18 0%, transparent 70%)`, pointerEvents: 'none' }} />
@@ -405,7 +414,7 @@ export default function Players() {
 
             <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
               <span>{sorted.length} players shown · Click column headers to sort</span>
-              <span>Saudi Pro League 2025/26</span>
+              <span>{leagueLabel}</span>
             </div>
           </>
         )}

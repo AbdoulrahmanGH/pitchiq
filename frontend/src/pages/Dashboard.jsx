@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getTeamReadiness, getMatchesSummary, getSquadDepth } from '../services/api';
-import { PLAYER_POSITIONS, POS_ABBREV, POS_COLORS } from '../constants';
+import { getTeamReadiness, getMatchesSummary, getSquadDepth, getTeamInfo } from '../services/api';
+import { POS_ABBREV, POS_COLORS } from '../constants';
+import Skeleton from '../components/Skeleton';
 
 const RECENT_MINUTES_MAX = 270; // 3 full 90-minute matches -- matches the "last 3 fixtures" workload window
 
@@ -49,10 +50,10 @@ function StatCard({ title, value, sub, children }) {
   );
 }
 
-function FatigueCard({ player }) {
+function FatigueCard({ player, positionByPlayerId }) {
   const [hov, setHov] = useState(false);
   const name = player.name || player.player_id;
-  const posLabel = POS_ABBREV[PLAYER_POSITIONS[player.player_id]] || '???';
+  const posLabel = POS_ABBREV[positionByPlayerId[player.player_id]] || '???';
   const posStyle = POS_COLORS[posLabel] || { color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)' };
   const num = player.player_id;
 
@@ -102,7 +103,7 @@ function FatigueCard({ player }) {
   );
 }
 
-function LastMatchCard({ match }) {
+function LastMatchCard({ match, teamName }) {
   const isHome = match.home_away_neutral === 'home';
   const resMap = {
     win:  { label: 'WIN',  color: 'var(--green)',  bg: 'var(--green-dim)',  border: 'rgba(63,185,80,0.2)' },
@@ -122,7 +123,7 @@ function LastMatchCard({ match }) {
         </div>
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
-            Al Qadsiah <span style={{ color: 'var(--text-muted)', fontWeight: 400, margin: '0 6px' }}>vs</span> {match.opponent}
+            {teamName} <span style={{ color: 'var(--text-muted)', fontWeight: 400, margin: '0 6px' }}>vs</span> {match.opponent}
           </div>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 52, fontWeight: 700, letterSpacing: '-2px', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
             <span style={{ color: match.result !== 'loss' ? 'var(--text-primary)' : 'rgba(230,237,243,0.5)' }}>{match.goals_scored}</span>
@@ -143,7 +144,7 @@ function LastMatchCard({ match }) {
               <div style={{ width: `${match.possession_pct}%`, height: '100%', background: ACC, borderRadius: 2 }} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>AQF</span>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{teamName}</span>
               <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>OPP {(100 - match.possession_pct).toFixed(1)}%</span>
             </div>
           </div>
@@ -173,15 +174,30 @@ export default function Dashboard() {
   const [readiness, setReadiness] = useState(null);
   const [matches,   setMatches]   = useState([]);
   const [depth,     setDepth]     = useState(null);
+  const [teamInfo,  setTeamInfo]  = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
 
   useEffect(() => {
-    Promise.all([getTeamReadiness(), getMatchesSummary(), getSquadDepth()])
-      .then(([r, m, d]) => { setReadiness(r); setMatches(m); setDepth(d); })
+    Promise.all([getTeamReadiness(), getMatchesSummary(), getSquadDepth(), getTeamInfo()])
+      .then(([r, m, d, t]) => { setReadiness(r); setMatches(m); setDepth(d); setTeamInfo(t); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Real position per player, from /api/players/depth's buckets -- same fix
+  // as Players.jsx; the old PLAYER_POSITIONS map used v1 string ids and
+  // never matched real StatsBomb integer ids, so every fatigue-risk badge
+  // silently showed "???".
+  const positionByPlayerId = {};
+  if (depth) {
+    for (const bucket of ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']) {
+      for (const p of depth[bucket] || []) positionByPlayerId[p.id] = bucket;
+    }
+  }
+
+  const teamName = teamInfo?.team_name ?? '—';
+  const leagueLabel = teamInfo ? `${teamInfo.competition_name} ${teamInfo.season_name}` : '';
 
   const lastMatch = matches.length
     ? [...matches].sort((a, b) => new Date(b.date) - new Date(a.date))[0]
@@ -198,16 +214,33 @@ export default function Dashboard() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Squad Dashboard</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Saudi Pro League 2025/26</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{leagueLabel}</div>
         </div>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 40px', minWidth: 0 }}>
         {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, height: 200, color: 'var(--text-secondary)', fontSize: 13 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: ACC, animation: 'pulse 1.2s ease-in-out infinite' }} />
-            Loading squad data...
-          </div>
+          <>
+            <div style={{ display: 'flex', gap: 18, marginBottom: 24, flexWrap: 'wrap' }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{ background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '24px 26px', flex: 1, minWidth: 220 }}>
+                  <Skeleton width={100} height={11} style={{ marginBottom: 14 }} />
+                  <Skeleton width={140} height={42} style={{ marginBottom: 8 }} />
+                  <Skeleton width={180} height={12} />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+              <div style={{ background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '20px 24px', flex: '0 0 340px' }}>
+                <Skeleton width={90} height={11} style={{ marginBottom: 18 }} />
+                <Skeleton width={160} height={16} style={{ margin: '0 auto 14px' }} />
+                <Skeleton width={120} height={44} style={{ margin: '0 auto' }} />
+              </div>
+              <div style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 20 }}>
+                {[0, 1, 2, 3, 4].map(i => <Skeleton key={i} height={38} style={{ marginBottom: 10 }} />)}
+              </div>
+            </div>
+          </>
         )}
         {error && (
           <div style={{ padding: '16px 20px', background: 'var(--red-dim)', border: '1px solid rgba(248,81,73,0.2)', borderRadius: 12, color: 'var(--red)', fontSize: 13 }}>
@@ -225,7 +258,7 @@ export default function Dashboard() {
                 value={depth ? `${depth.total_players - (readiness?.at_risk_players?.length ?? 0)}/${depth.total_players}` : '—'}
                 sub="Squad total minus flagged fatigue risk"
               />
-              <StatCard title="Saudi Pro League" value={`${wins}W · ${draws}D · ${losses}L`} sub={`Last ${matches.length} matches · GF ${gf}  GA ${ga}`}>
+              <StatCard title={teamInfo?.competition_name ?? 'League'} value={`${wins}W · ${draws}D · ${losses}L`} sub={`Last ${matches.length} matches · GF ${gf}  GA ${ga}`}>
                 <RecordDisplay matches={matches} />
               </StatCard>
             </div>
@@ -241,14 +274,14 @@ export default function Dashboard() {
                 </div>
                 <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
                   {readiness.at_risk_players.map(p => (
-                    <FatigueCard key={p.player_id} player={p} />
+                    <FatigueCard key={p.player_id} player={p} positionByPlayerId={positionByPlayerId} />
                   ))}
                 </div>
               </div>
             )}
 
             <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-              {lastMatch && <LastMatchCard match={lastMatch} />}
+              {lastMatch && <LastMatchCard match={lastMatch} teamName={teamName} />}
 
               <div style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden' }}>
                 <div style={{ padding: '20px 20px 0' }}>
@@ -277,7 +310,7 @@ export default function Dashboard() {
                       <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
                         <div style={{ fontSize: 10, color: resColor, width: 14, textAlign: 'center' }}>{icon}</div>
                         <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
-                          <span style={{ opacity: isHome ? 1 : 0.6 }}>Al Qadsiah</span>
+                          <span style={{ opacity: isHome ? 1 : 0.6 }}>{teamName}</span>
                           <span style={{ margin: '0 8px', color: 'var(--text-muted)', fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 12 }}>{m.goals_scored}–{m.goals_conceded}</span>
                           <span style={{ opacity: !isHome ? 1 : 0.6 }}>{m.opponent}</span>
                         </div>

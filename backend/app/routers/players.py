@@ -86,6 +86,7 @@ def aggregate_performance(stats_rows, players_by_id):
                 "player_id": pid,
                 "total_minutes": 0,
                 "total_goals": 0,
+                "total_assists": 0,
                 "total_shots": 0,
                 "total_passes_attempted": 0,
                 "total_passes_completed": 0,
@@ -102,6 +103,7 @@ def aggregate_performance(stats_rows, players_by_id):
         p = aggregated[pid]
         p["total_minutes"] += row["minutes_played"] or 0
         p["total_goals"] += row["goals"] or 0
+        p["total_assists"] += row["assists"] or 0
         p["total_shots"] += row["shots"] or 0
         p["total_passes_attempted"] += row["passes_attempted"] or 0
         p["total_passes_completed"] += row["passes_completed"] or 0
@@ -145,7 +147,7 @@ def get_player_performance(_user: AuthenticatedUser = Depends(get_current_user))
 
     stats_rows = supabase.table("player_match_stats").select(
         "player_id, minutes_played, passes_attempted, passes_completed, "
-        "key_passes, progressive_passes, shots, goals, xg, xa, "
+        "key_passes, progressive_passes, shots, goals, assists, xg, xa, "
         "dribbles_attempted, dribbles_completed, progressive_carries, tackles"
     ).eq("team_id", BARCELONA_TEAM_ID).execute().data
 

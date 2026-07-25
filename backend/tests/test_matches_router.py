@@ -11,6 +11,7 @@ from app.routers.matches import (
     BARCELONA_TEAM_ID,
     build_matches_response,
     build_readiness_response,
+    build_team_info_response,
 )
 
 TEAM_NAMES = {215: "Athletic Club", 217: "Barcelona", 223: "Malaga"}
@@ -99,3 +100,17 @@ def test_readiness_score_floors_at_zero():
     result = build_readiness_response(at_risk)
 
     assert result["readiness_score"] == 0
+
+
+# --------------------------- bug: hardcoded team/league name ---------------------------
+
+def test_team_info_returns_real_team_competition_and_season():
+    # Regression test for the frontend's hardcoded "Al Qadsiah" / "Saudi Pro
+    # League" strings -- this is the real data they must be replaced with.
+    result = build_team_info_response("Barcelona", "La Liga", "2015/2016")
+
+    assert result == {
+        "team_name": "Barcelona",
+        "competition_name": "La Liga",
+        "season_name": "2015/2016",
+    }

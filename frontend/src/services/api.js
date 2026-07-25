@@ -28,6 +28,7 @@ export const getFatigueRisk        = () => get('/api/players/fatigue-risk');
 export const getSquadDepth         = () => get('/api/players/depth');
 export const getMatchesSummary     = () => get('/api/matches/summary');
 export const getTeamReadiness      = () => get('/api/team/readiness');
+export const getTeamInfo           = () => get('/api/team/info');
 
 // Kept as an explicit-token call (not the shared currentToken) -- Login.jsx
 // needs the just-issued token's whoami result before AuthProvider's own

@@ -85,7 +85,7 @@ def test_performance_rows_include_name_and_nickname():
     stats_rows = [
         {"player_id": 5503, "minutes_played": 90, "passes_attempted": 40,
          "passes_completed": 35, "key_passes": 2, "progressive_passes": 5,
-         "shots": 3, "goals": 1, "xg": 0.4, "xa": 0.2,
+         "shots": 3, "goals": 1, "xg": 0.4, "xa": 0.2, "assists": 0,
          "dribbles_attempted": 4, "dribbles_completed": 3,
          "progressive_carries": 2, "tackles": 0},
     ]
@@ -101,3 +101,28 @@ def test_performance_rows_include_name_and_nickname():
     assert result[0]["total_goals"] == 1
     assert result[0]["xg"] == pytest.approx(0.4)
     assert result[0]["dribble_success_rate"] == pytest.approx(75.0)
+
+
+# ------------------------------ bug 3: assists ------------------------------
+
+def test_performance_rows_sum_real_assists_across_matches():
+    # Assists is a genuine column on player_match_stats (goal_assist Pass
+    # events, backfilled via migrations/0001) -- not derived from key_passes,
+    # which also counts shot_assist passes that never became a goal.
+    stats_rows = [
+        {"player_id": 5503, "minutes_played": 90, "passes_attempted": 40,
+         "passes_completed": 35, "key_passes": 2, "progressive_passes": 5,
+         "shots": 3, "goals": 1, "xg": 0.4, "xa": 0.2, "assists": 1,
+         "dribbles_attempted": 4, "dribbles_completed": 3,
+         "progressive_carries": 2, "tackles": 0},
+        {"player_id": 5503, "minutes_played": 90, "passes_attempted": 30,
+         "passes_completed": 28, "key_passes": 1, "progressive_passes": 3,
+         "shots": 1, "goals": 0, "xg": 0.1, "xa": 0.0, "assists": 2,
+         "dribbles_attempted": 2, "dribbles_completed": 1,
+         "progressive_carries": 1, "tackles": 1},
+    ]
+    players_by_id = {5503: {"name": "Lionel Messi", "nickname": None}}
+
+    result = aggregate_performance(stats_rows, players_by_id)
+
+    assert result[0]["total_assists"] == 3
