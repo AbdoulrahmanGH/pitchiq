@@ -24,7 +24,7 @@ class FakeAuth:
 
     def get_user(self, jwt):
         if self._raise:
-            from gotrue.errors import AuthApiError
+            from supabase_auth.errors import AuthApiError
             raise AuthApiError("invalid JWT", 401, "invalid_token")
         return FakeUserResponse(self._user)
 

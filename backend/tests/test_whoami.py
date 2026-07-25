@@ -22,6 +22,24 @@ def test_whoami_without_token_returns_401():
     assert response.status_code == 401
 
 
+def test_whoami_without_token_never_touches_the_db_client():
+    # A missing token must be rejected before any dependency tries to reach
+    # Supabase at all -- otherwise a request with no token could 500 (real
+    # bug: get_db() raises if SUPABASE_URL/KEY aren't configured, e.g. in a
+    # CI environment with no secrets) instead of cleanly 401ing.
+    def poisoned_get_db():
+        raise AssertionError("get_db() should never be called for a missing token")
+
+    app.dependency_overrides[get_db] = poisoned_get_db
+
+    try:
+        response = client.get("/api/whoami")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 401
+
+
 def test_whoami_with_valid_token_returns_id_and_role():
     fake_user = FakeUser(id="user-42", email="coach@example.com")
     app.dependency_overrides[get_db] = lambda: FakeClient(

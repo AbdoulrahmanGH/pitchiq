@@ -28,17 +28,27 @@ class AuthenticatedUser:
     role: Optional[str]
 
 
-def get_current_user(
+def _require_bearer_token(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    client=Depends(get_db),
-) -> AuthenticatedUser:
+) -> str:
+    # A dependency of its own, not a check inside get_current_user's body:
+    # FastAPI resolves sibling Depends(...) params (like client=Depends(get_db)
+    # below) independently of each other, so a check written inside the
+    # function body would run too late to stop get_db() from being called
+    # first. Raising here, before get_db is ever reached, means a request
+    # with no token never touches Supabase at all.
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing bearer token",
         )
+    return credentials.credentials
 
-    token = credentials.credentials
+
+def get_current_user(
+    token: str = Depends(_require_bearer_token),
+    client=Depends(get_db),
+) -> AuthenticatedUser:
     try:
         user_response = client.auth.get_user(token)
     except Exception:

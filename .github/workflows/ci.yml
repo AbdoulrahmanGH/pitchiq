@@ -26,6 +26,9 @@ jobs:
       - name: Import check
         run: python -c "import app.main"
 
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
