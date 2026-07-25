@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.auth import AuthenticatedUser, get_current_user
 from app.db import get_db
 from app.services.fatigue import get_at_risk_players
 
@@ -53,7 +54,7 @@ def build_readiness_response(at_risk_players):
 
 
 @matches_router.get("/summary")
-def get_matches_summary():
+def get_matches_summary(_user: AuthenticatedUser = Depends(get_current_user)):
     supabase = get_db()
 
     matches_rows = supabase.table("matches").select(
@@ -73,7 +74,7 @@ def get_matches_summary():
 
 
 @team_router.get("/readiness")
-def get_team_readiness():
+def get_team_readiness(_user: AuthenticatedUser = Depends(get_current_user)):
     supabase = get_db()
     at_risk = get_at_risk_players(supabase, BARCELONA_TEAM_ID)
     return build_readiness_response(at_risk)

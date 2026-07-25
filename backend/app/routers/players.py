@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.auth import AuthenticatedUser, get_current_user
 from app.db import get_db
 from app.services.fatigue import get_at_risk_players
 
@@ -139,7 +140,7 @@ def _players_by_id(client, player_ids):
 
 
 @router.get("/performance")
-def get_player_performance():
+def get_player_performance(_user: AuthenticatedUser = Depends(get_current_user)):
     supabase = get_db()
 
     stats_rows = supabase.table("player_match_stats").select(
@@ -153,13 +154,13 @@ def get_player_performance():
 
 
 @router.get("/fatigue-risk")
-def get_fatigue_risk():
+def get_fatigue_risk(_user: AuthenticatedUser = Depends(get_current_user)):
     supabase = get_db()
     return get_at_risk_players(supabase, BARCELONA_TEAM_ID)
 
 
 @router.get("/depth")
-def get_squad_depth():
+def get_squad_depth(_user: AuthenticatedUser = Depends(get_current_user)):
     supabase = get_db()
 
     pms_rows = supabase.table("player_match_stats").select("player_id").eq(
