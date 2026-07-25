@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth import AuthenticatedUser, get_current_user
 from app.db import get_db
@@ -66,6 +66,54 @@ def build_team_info_response(team_name, competition_name, season_name):
     }
 
 
+def build_match_detail_response(match_row, team_names_by_id, stats_rows, players_by_id):
+    """match_row: single `matches` row. team_names_by_id: {team_id: name}.
+    stats_rows: player_match_stats rows for this match_id, both teams mixed
+    together. players_by_id: {player_id: {"name", "nickname"}}.
+
+    Splits the mixed stats_rows into a per-team lineup, each entry carrying
+    the real name/nickname/goals/assists for that match -- this is what
+    powers the match modal's "who scored, who assisted" view.
+    """
+    def lineup_for(team_id):
+        entries = []
+        for row in stats_rows:
+            if row["team_id"] != team_id:
+                continue
+            meta = players_by_id.get(row["player_id"], {})
+            entries.append({
+                "player_id": row["player_id"],
+                "name": meta.get("name"),
+                "nickname": meta.get("nickname"),
+                "position": row.get("position"),
+                "minutes_played": row.get("minutes_played") or 0,
+                "goals": row.get("goals") or 0,
+                "assists": row.get("assists") or 0,
+            })
+        entries.sort(key=lambda p: p["minutes_played"], reverse=True)
+        return entries
+
+    home_id = match_row["home_team_id"]
+    away_id = match_row["away_team_id"]
+    return {
+        "id": match_row["id"],
+        "date": match_row["date"],
+        "stadium": match_row["stadium"],
+        "home_team": {
+            "id": home_id,
+            "name": team_names_by_id.get(home_id),
+            "score": match_row["home_score"],
+            "lineup": lineup_for(home_id),
+        },
+        "away_team": {
+            "id": away_id,
+            "name": team_names_by_id.get(away_id),
+            "score": match_row["away_score"],
+            "lineup": lineup_for(away_id),
+        },
+    }
+
+
 @matches_router.get("/summary")
 def get_matches_summary(_user: AuthenticatedUser = Depends(get_current_user)):
     supabase = get_db()
@@ -84,6 +132,34 @@ def get_matches_summary(_user: AuthenticatedUser = Depends(get_current_user)):
     ).eq("team_id", BARCELONA_TEAM_ID).in_("match_id", match_ids).execute().data
 
     return build_matches_response(matches_rows, team_stats_rows, team_names_by_id, BARCELONA_TEAM_ID)
+
+
+@matches_router.get("/{match_id}/detail")
+def get_match_detail(match_id: int, _user: AuthenticatedUser = Depends(get_current_user)):
+    supabase = get_db()
+
+    match_rows = supabase.table("matches").select(
+        "id, date, home_team_id, away_team_id, home_score, away_score, stadium"
+    ).eq("id", match_id).execute().data
+    if not match_rows:
+        raise HTTPException(status_code=404, detail="Match not found")
+    match_row = match_rows[0]
+
+    team_ids = [match_row["home_team_id"], match_row["away_team_id"]]
+    teams_rows = supabase.table("teams").select("id, name").in_("id", team_ids).execute().data
+    team_names_by_id = {t["id"]: t["name"] for t in teams_rows}
+
+    stats_rows = supabase.table("player_match_stats").select(
+        "player_id, team_id, position, minutes_played, goals, assists"
+    ).eq("match_id", match_id).execute().data
+
+    player_ids = list({r["player_id"] for r in stats_rows})
+    players_rows = supabase.table("players").select("id, name, nickname").in_(
+        "id", player_ids
+    ).execute().data if player_ids else []
+    players_by_id = {p["id"]: {"name": p["name"], "nickname": p["nickname"]} for p in players_rows}
+
+    return build_match_detail_response(match_row, team_names_by_id, stats_rows, players_by_id)
 
 
 @team_router.get("/readiness")

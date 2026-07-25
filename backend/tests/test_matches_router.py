@@ -9,6 +9,7 @@ our own team), now computed from schema_v2's team-agnostic match rows.
 
 from app.routers.matches import (
     BARCELONA_TEAM_ID,
+    build_match_detail_response,
     build_matches_response,
     build_readiness_response,
     build_team_info_response,
@@ -114,3 +115,64 @@ def test_team_info_returns_real_team_competition_and_season():
         "competition_name": "La Liga",
         "season_name": "2015/2016",
     }
+
+
+# --------------------------- match detail (lineups, scorers, assists) ---------------------------
+
+MATCH_ROW = {
+    "id": 266236, "date": "2015-08-23", "home_team_id": 215, "away_team_id": 217,
+    "home_score": 0, "away_score": 1, "stadium": "San Mames",
+}
+DETAIL_TEAM_NAMES = {215: "Athletic Club", 217: "Barcelona"}
+DETAIL_PLAYERS_BY_ID = {
+    5503: {"name": "Lionel Messi", "nickname": "Messi"},
+    5246: {"name": "Luis Suarez", "nickname": None},
+    999:  {"name": "Iker Muniain", "nickname": None},
+}
+
+
+def test_match_detail_splits_lineup_by_team():
+    stats_rows = [
+        {"player_id": 5503, "team_id": 217, "position": "Right Wing", "minutes_played": 90, "goals": 1, "assists": 0},
+        {"player_id": 5246, "team_id": 217, "position": "Center Forward", "minutes_played": 90, "goals": 0, "assists": 1},
+        {"player_id": 999,  "team_id": 215, "position": "Right Wing", "minutes_played": 90, "goals": 0, "assists": 0},
+    ]
+
+    result = build_match_detail_response(MATCH_ROW, DETAIL_TEAM_NAMES, stats_rows, DETAIL_PLAYERS_BY_ID)
+
+    assert result["id"] == 266236
+    assert result["stadium"] == "San Mames"
+    assert result["home_team"]["name"] == "Athletic Club"
+    assert result["home_team"]["score"] == 0
+    assert [p["player_id"] for p in result["home_team"]["lineup"]] == [999]
+    assert result["away_team"]["name"] == "Barcelona"
+    assert result["away_team"]["score"] == 1
+    assert {p["player_id"] for p in result["away_team"]["lineup"]} == {5503, 5246}
+
+
+def test_match_detail_includes_real_names_goals_and_assists():
+    stats_rows = [
+        {"player_id": 5503, "team_id": 217, "position": "Right Wing", "minutes_played": 90, "goals": 1, "assists": 0},
+        {"player_id": 5246, "team_id": 217, "position": "Center Forward", "minutes_played": 90, "goals": 0, "assists": 1},
+    ]
+
+    result = build_match_detail_response(MATCH_ROW, DETAIL_TEAM_NAMES, stats_rows, DETAIL_PLAYERS_BY_ID)
+
+    by_id = {p["player_id"]: p for p in result["away_team"]["lineup"]}
+    assert by_id[5503]["name"] == "Lionel Messi"
+    assert by_id[5503]["nickname"] == "Messi"
+    assert by_id[5503]["goals"] == 1
+    assert by_id[5503]["assists"] == 0
+    assert by_id[5246]["goals"] == 0
+    assert by_id[5246]["assists"] == 1
+
+
+def test_match_detail_lineup_sorted_by_minutes_played_desc():
+    stats_rows = [
+        {"player_id": 5246, "team_id": 217, "position": "Center Forward", "minutes_played": 60, "goals": 0, "assists": 0},
+        {"player_id": 5503, "team_id": 217, "position": "Right Wing", "minutes_played": 90, "goals": 0, "assists": 0},
+    ]
+
+    result = build_match_detail_response(MATCH_ROW, DETAIL_TEAM_NAMES, stats_rows, DETAIL_PLAYERS_BY_ID)
+
+    assert [p["player_id"] for p in result["away_team"]["lineup"]] == [5503, 5246]

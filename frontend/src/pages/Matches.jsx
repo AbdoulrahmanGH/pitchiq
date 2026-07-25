@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getMatchesSummary, getTeamInfo } from '../services/api';
 import Skeleton from '../components/Skeleton';
+import MatchModal from '../components/MatchModal';
 
 const ACC = '#FF6B35';
 
@@ -36,7 +37,7 @@ function PossessionBar({ pct, color, teamName }) {
   );
 }
 
-function MatchCard({ match, teamName }) {
+function MatchCard({ match, teamName, onSelect }) {
   const [hov, setHov] = useState(false);
   const res = RES_MAP[match.result] || RES_MAP.draw;
   const isHome = match.home_away_neutral === 'home';
@@ -46,6 +47,7 @@ function MatchCard({ match, teamName }) {
     <div
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
+      onClick={() => onSelect(match.id)}
       style={{
         background: hov ? 'linear-gradient(145deg, #20293A 0%, #1A2230 100%)' : 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)',
         border: hov ? '1px solid rgba(255,107,53,0.18)' : '1px solid rgba(255,255,255,0.07)',
@@ -53,7 +55,7 @@ function MatchCard({ match, teamName }) {
         display: 'flex', alignItems: 'center',
         transition: 'background 0.2s, border 0.2s, box-shadow 0.2s',
         boxShadow: hov ? '0 8px 32px rgba(0,0,0,0.4)' : '0 4px 16px rgba(0,0,0,0.25)',
-        position: 'relative', overflow: 'hidden', cursor: 'default',
+        position: 'relative', overflow: 'hidden', cursor: 'pointer',
       }}
     >
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: res.color, borderRadius: '3px 0 0 3px' }} />
@@ -112,6 +114,7 @@ export default function Matches() {
   const [teamInfo, setTeamInfo] = useState(null);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
+  const [selectedMatchId, setSelectedMatchId] = useState(null);
 
   useEffect(() => {
     Promise.all([getMatchesSummary(), getTeamInfo()])
@@ -195,7 +198,7 @@ export default function Matches() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {sorted.map(m => <MatchCard key={m.id} match={m} teamName={teamName} />)}
+              {sorted.map(m => <MatchCard key={m.id} match={m} teamName={teamName} onSelect={setSelectedMatchId} />)}
             </div>
 
             <div style={{ marginTop: 20, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
@@ -204,6 +207,8 @@ export default function Matches() {
           </>
         )}
       </div>
+
+      <MatchModal matchId={selectedMatchId} open={selectedMatchId != null} onClose={() => setSelectedMatchId(null)} />
     </div>
   );
 }

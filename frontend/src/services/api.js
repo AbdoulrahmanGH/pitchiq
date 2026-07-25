@@ -11,7 +11,11 @@ export function setAuthToken(token) {
 async function get(path) {
   const headers = currentToken ? { Authorization: `Bearer ${currentToken}` } : {};
   const res = await fetch(`${BASE}${path}`, { headers });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    const err = new Error(`${res.status} ${res.statusText}`);
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 
@@ -29,6 +33,7 @@ export const getSquadDepth         = () => get('/api/players/depth');
 export const getMatchesSummary     = () => get('/api/matches/summary');
 export const getTeamReadiness      = () => get('/api/team/readiness');
 export const getTeamInfo           = () => get('/api/team/info');
+export const getMatchDetail        = (matchId) => get(`/api/matches/${matchId}/detail`);
 
 // Kept as an explicit-token call (not the shared currentToken) -- Login.jsx
 // needs the just-issued token's whoami result before AuthProvider's own

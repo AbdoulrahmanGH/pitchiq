@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { getPlayerPerformance, getFatigueRisk, getSquadDepth, getTeamInfo } from '../services/api';
 import { POS_ABBREV, POS_COLORS } from '../constants';
 import Skeleton from '../components/Skeleton';
+import PlayerModal from '../components/PlayerModal';
 
 const ACC = '#FF6B35';
 const POS_MAP = { GK: 'Goalkeeper', DEF: 'Defender', MID: 'Midfielder', FWD: 'Forward' };
@@ -60,7 +61,7 @@ function SortIcon({ dir }) {
 
 const NUM = { fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' };
 
-function TableRow({ player, acc, maxShots, maxPasses }) {
+function TableRow({ player, acc, maxShots, maxPasses, onSelect }) {
   const [hov, setHov] = useState(false);
   const statusIsRisk = player.status === 'AT RISK';
 
@@ -68,12 +69,13 @@ function TableRow({ player, acc, maxShots, maxPasses }) {
     <div
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
+      onClick={() => onSelect(player)}
       style={{
         display: 'flex', alignItems: 'center',
         padding: '0 16px', minHeight: 48,
         borderBottom: '1px solid rgba(255,255,255,0.04)',
         background: hov ? 'rgba(255,255,255,0.03)' : 'transparent',
-        transition: 'background 0.15s', cursor: 'default',
+        transition: 'background 0.15s', cursor: 'pointer',
       }}
     >
       <div style={{ width: 180, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, paddingRight: 8 }}>
@@ -153,6 +155,7 @@ export default function Players() {
   const [search, setSearch] = useState('');
   const [sortKey,   setSortKey]   = useState('total_goals');
   const [sortDir,   setSortDir]   = useState('desc');
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
 
   useEffect(() => {
     Promise.all([getPlayerPerformance(), getFatigueRisk(), getSquadDepth(), getTeamInfo()])
@@ -393,7 +396,7 @@ export default function Players() {
                         No players match {search ? `"${search}"` : 'this filter'}.
                       </div>
                     ) : sorted.map(p => (
-                      <TableRow key={p.player_id} player={p} acc={ACC} maxShots={maxShots} maxPasses={maxPasses} />
+                      <TableRow key={p.player_id} player={p} acc={ACC} maxShots={maxShots} maxPasses={maxPasses} onSelect={setSelectedPlayer} />
                     ))}
 
                   </div>
@@ -419,6 +422,8 @@ export default function Players() {
           </>
         )}
       </div>
+
+      <PlayerModal player={selectedPlayer} open={!!selectedPlayer} onClose={() => setSelectedPlayer(null)} />
     </div>
   );
 }
