@@ -1,3 +1,10 @@
+-- Row Level Security is deliberately NOT enabled on any table here. The
+-- frontend never talks to Supabase directly -- every request goes through
+-- FastAPI, which authenticates the caller and checks their role itself
+-- (see backend/app/auth.py). RLS would be defense in depth against an
+-- attack surface (direct client-to-Supabase access) that doesn't exist in
+-- this design, so it's skipped rather than maintained as dead policy.
+
 create table teams (
   id integer primary key,
   name text not null,

@@ -7,6 +7,7 @@ const NAV = [
   { path: '/matches', emoji: '⚽', label: 'Matches'     },
   { path: '/depth',   emoji: '📊', label: 'Squad Depth' },
   { path: '/about',   emoji: '📖', label: 'About'       },
+  { path: '/login',   emoji: '🔐', label: 'Login'       },
 ];
 
 function useMobile() {
