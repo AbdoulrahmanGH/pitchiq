@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getTeamReadiness, getMatchesSummary } from '../services/api';
-import { PLAYER_NAMES, PLAYER_POSITIONS, POS_ABBREV, POS_COLORS } from '../constants';
+import { PLAYER_POSITIONS, POS_ABBREV, POS_COLORS } from '../constants';
 
 const ACC = '#FF6B35';
 
@@ -49,10 +49,10 @@ function StatCard({ title, value, sub, children }) {
 
 function FatigueCard({ player }) {
   const [hov, setHov] = useState(false);
-  const name = PLAYER_NAMES[player.player_id] || player.player_id;
+  const name = player.name || player.player_id;
   const posLabel = POS_ABBREV[PLAYER_POSITIONS[player.player_id]] || '???';
   const posStyle = POS_COLORS[posLabel] || { color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)' };
-  const num = player.player_id.replace('player-', '');
+  const num = player.player_id;
 
   return (
     <div

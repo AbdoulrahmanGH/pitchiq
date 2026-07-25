@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { getSquadDepth, getFatigueRisk } from '../services/api';
-import { PLAYER_NAMES } from '../constants';
 
 const ACC = '#FF6B35';
 
@@ -12,9 +11,9 @@ const POSITIONS = [
   { key: 'Forward',    abbr: 'FWD', plural: 'Forwards',    colorHex: '#FF6B35', color: 'var(--orange)', dim: 'var(--orange-dim)' },
 ];
 
-function DepthCard({ pos, playerIds, atRiskIds }) {
+function DepthCard({ pos, players, atRiskIds }) {
   const [hov, setHov] = useState(false);
-  const count = playerIds.length;
+  const count = players.length;
   const lowDepth = count < 3;
 
   return (
@@ -45,7 +44,7 @@ function DepthCard({ pos, playerIds, atRiskIds }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
             {(() => {
-              const atRisk = playerIds.filter(id => atRiskIds.has(id)).length;
+              const atRisk = players.filter(p => atRiskIds.has(p.id)).length;
               const fit    = count - atRisk;
               return (
                 <>
@@ -60,15 +59,14 @@ function DepthCard({ pos, playerIds, atRiskIds }) {
         <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', marginBottom: 14 }} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          {playerIds.map(id => {
-            const isRisk = atRiskIds.has(id);
-            const name = PLAYER_NAMES[id] || id;
+          {players.map(p => {
+            const isRisk = atRiskIds.has(p.id);
             return (
-              <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 22, height: 22, borderRadius: 6, background: 'linear-gradient(135deg, #252D3A, #1A2030)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontFamily: 'Space Grotesk', fontWeight: 700, color: '#8B949E', flexShrink: 0 }}>
-                  {id.replace('player-', '')}
+                  {p.id}
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 500, color: '#E6EDF3', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: '#E6EDF3', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: isRisk ? 'var(--yellow)' : 'var(--green)', flexShrink: 0, boxShadow: `0 0 4px ${isRisk ? 'var(--yellow)' : 'var(--green)'}` }} />
               </div>
             );
@@ -194,7 +192,7 @@ export default function SquadDepth() {
                 <DepthCard
                   key={pos.key}
                   pos={pos}
-                  playerIds={depth[pos.key] || []}
+                  players={depth[pos.key] || []}
                   atRiskIds={atRiskIds}
                 />
               ))}

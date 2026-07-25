@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { getPlayerPerformance, getFatigueRisk } from '../services/api';
-import { PLAYER_NAMES, PLAYER_POSITIONS, POS_ABBREV, POS_COLORS } from '../constants';
+import { PLAYER_POSITIONS, POS_ABBREV, POS_COLORS } from '../constants';
 
 const ACC = '#FF6B35';
 const POS_MAP = { GK: 'Goalkeeper', DEF: 'Defender', MID: 'Midfielder', FWD: 'Forward' };
@@ -79,7 +79,7 @@ function TableRow({ player, acc, maxShots, maxPasses }) {
     >
       <div style={{ width: 180, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, paddingRight: 8 }}>
         <div style={{ width: 28, height: 28, borderRadius: 7, background: 'linear-gradient(135deg, #252D3A, #1A2030)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontFamily: 'Space Grotesk', fontWeight: 700, color: '#8B949E', flexShrink: 0 }}>
-          {player.player_id.replace('player-', '')}
+          {player.player_id}
         </div>
         <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{player.name}</span>
       </div>
@@ -167,7 +167,6 @@ export default function Players() {
 
   const players = useMemo(() => performance.map(p => ({
     ...p,
-    name: PLAYER_NAMES[p.player_id] || p.player_id,
     pos:  POS_ABBREV[PLAYER_POSITIONS[p.player_id]] || '???',
     status: atRiskIds.has(p.player_id) ? 'AT RISK' : 'FIT',
   })), [performance, atRiskIds]);

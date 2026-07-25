@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { useAuth } from '../services/AuthProvider';
 
 const NAV = [
   { path: '/',        emoji: '🏠', label: 'Dashboard'   },
@@ -7,8 +8,26 @@ const NAV = [
   { path: '/matches', emoji: '⚽', label: 'Matches'     },
   { path: '/depth',   emoji: '📊', label: 'Squad Depth' },
   { path: '/about',   emoji: '📖', label: 'About'       },
-  { path: '/login',   emoji: '🔐', label: 'Login'       },
 ];
+
+const LOGIN_ITEM = { path: '/login', emoji: '🔐', label: 'Login' };
+
+// Nav visibility by role -- kept here rather than per-page route guards,
+// since this step is only about which links show, not blocking direct
+// navigation to a route.
+const NAV_PATHS_BY_ROLE = {
+  analyst: ['/', '/players', '/matches', '/depth', '/about'],
+  coach:   ['/', '/players', '/matches', '/depth'],
+  scout:   ['/players', '/matches', '/depth'],
+};
+
+function navForRole(role) {
+  const allowedPaths = NAV_PATHS_BY_ROLE[role];
+  // Role not resolved yet (e.g. on /login before signing in) -- show
+  // everything rather than guessing.
+  const items = allowedPaths ? NAV.filter(n => allowedPaths.includes(n.path)) : NAV;
+  return [...items, LOGIN_ITEM];
+}
 
 function useMobile() {
   const [mobile, setMobile] = useState(() => window.innerWidth < 768);
@@ -60,6 +79,8 @@ function NavItem({ path, emoji, label, collapsed }) {
 export default function Sidebar() {
   const isMobile = useMobile();
   const w = isMobile ? 60 : 200;
+  const { role } = useAuth();
+  const nav = navForRole(role);
 
   return (
     <div style={{
@@ -104,7 +125,7 @@ export default function Sidebar() {
             Analytics
           </div>
         )}
-        {NAV.map(n => <NavItem key={n.path} {...n} collapsed={isMobile} />)}
+        {nav.map(n => <NavItem key={n.path} {...n} collapsed={isMobile} />)}
       </div>
 
       {!isMobile && (

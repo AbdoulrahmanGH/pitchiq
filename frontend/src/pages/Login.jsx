@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
 import { getWhoAmI } from '../services/api';
+import { useAuth } from '../services/AuthProvider';
 
 // Dev/demo-only quick-login credentials. These accounts are seeded by
 // backend/app/data/seed_demo_users.py against the non-production
@@ -12,6 +14,12 @@ const DEMO_ACCOUNTS = [
   { label: 'Demo: Coach', email: 'coach@example.com', password: 'Coach123!' },
   { label: 'Demo: Scout', email: 'scout@example.com', password: 'Scout123!' },
 ];
+
+// Landing route differs by role -- matches how each role actually uses the
+// app (a scout opens the app to look at players, not the team dashboard).
+function landingRouteForRole(role) {
+  return role === 'scout' ? '/players' : '/';
+}
 
 const pageStyle = {
   height: '100%',
@@ -58,17 +66,16 @@ const demoButtonStyle = {
 };
 
 export default function Login() {
+  const navigate = useNavigate();
+  const { session, role, signOut } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [whoami, setWhoami] = useState(null);
-  const [session, setSession] = useState(null);
 
   async function signIn(loginEmail, loginPassword) {
     setLoading(true);
     setError(null);
-    setWhoami(null);
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: loginEmail,
@@ -76,10 +83,8 @@ export default function Login() {
       });
       if (authError) throw authError;
 
-      setSession(data.session);
-      const token = data.session.access_token;
-      const who = await getWhoAmI(token);
-      setWhoami(who);
+      const who = await getWhoAmI(data.session.access_token);
+      navigate(landingRouteForRole(who.role), { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -87,15 +92,25 @@ export default function Login() {
     }
   }
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    setSession(null);
-    setWhoami(null);
-  }
-
   function handleSubmit(e) {
     e.preventDefault();
     signIn(email, password);
+  }
+
+  if (session) {
+    return (
+      <div style={pageStyle}>
+        <div style={cardStyle}>
+          <h2 style={{ marginBottom: 20 }}>Logged in</h2>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Signed in as</p>
+          <p style={{ fontSize: 15, marginBottom: 4 }}>{session.user.email}</p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            role: {role ?? 'unknown'}
+          </p>
+          <button style={buttonStyle} onClick={signOut}>Log out</button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -142,19 +157,6 @@ export default function Login() {
 
       {error && (
         <p style={{ color: 'var(--red)', marginTop: 12, fontSize: 13 }}>{error}</p>
-      )}
-
-      {session && whoami && (
-        <div style={{ marginTop: 20, padding: 12, background: 'var(--surface2)', borderRadius: 8 }}>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Logged in as</p>
-          <p style={{ fontSize: 14 }}>{session.user.email}</p>
-          <pre style={{ fontSize: 12, marginTop: 8, color: 'var(--green)' }}>
-            {JSON.stringify(whoami, null, 2)}
-          </pre>
-          <button style={{ ...demoButtonStyle, marginTop: 8 }} onClick={signOut}>
-            Log out
-          </button>
-        </div>
       )}
     </div>
     </div>
