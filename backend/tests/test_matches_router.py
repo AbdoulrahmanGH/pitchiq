@@ -176,3 +176,26 @@ def test_match_detail_lineup_sorted_by_minutes_played_desc():
     result = build_match_detail_response(MATCH_ROW, DETAIL_TEAM_NAMES, stats_rows, DETAIL_PLAYERS_BY_ID)
 
     assert [p["player_id"] for p in result["away_team"]["lineup"]] == [5503, 5246]
+
+
+def test_match_detail_shots_resolve_names_and_sort_by_minute():
+    shot_rows = [
+        {"player_id": 5246, "team_id": 217, "minute": 53, "x": 112.9, "y": 40.5, "outcome": "Goal", "xg": 0.365458},
+        {"player_id": 999, "team_id": 215, "minute": 14, "x": 89.2, "y": 35.4, "outcome": "Saved", "xg": 0.031754},
+    ]
+
+    result = build_match_detail_response(MATCH_ROW, DETAIL_TEAM_NAMES, [], DETAIL_PLAYERS_BY_ID, shot_rows)
+
+    assert [s["minute"] for s in result["shots"]] == [14, 53]
+    goal = result["shots"][1]
+    assert goal["player_name"] == "Luis Suarez"  # no nickname, falls back to name
+    assert goal["team_id"] == 217
+    assert (goal["x"], goal["y"]) == (112.9, 40.5)
+    assert goal["outcome"] == "Goal"
+    assert goal["xg"] == 0.365458
+
+
+def test_match_detail_without_shot_rows_returns_empty_shots():
+    result = build_match_detail_response(MATCH_ROW, DETAIL_TEAM_NAMES, [], DETAIL_PLAYERS_BY_ID)
+
+    assert result["shots"] == []

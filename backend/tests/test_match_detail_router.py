@@ -76,3 +76,30 @@ def test_match_detail_returns_real_lineup_for_a_real_match(analyst_token):
             assert player["name"]
             assert isinstance(player["goals"], int)
             assert isinstance(player["assists"], int)
+
+
+def test_match_detail_shots_include_known_suarez_goal(analyst_token):
+    # Athletic Club 0-1 Barcelona, 2015-08-23: the only goal is Luis Suarez
+    # in the 54th minute (StatsBomb minute=53, 0-indexed). Raw StatsBomb shot
+    # coordinates are in the shooter's own attacking frame (toward x=120), so
+    # this goal must sit close to x=120 in the raw data even though Barcelona
+    # were the away team -- the frontend mirrors away shots for display.
+    response = client.get(
+        "/api/matches/266236/detail",
+        headers={"Authorization": f"Bearer {analyst_token}"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+
+    shots = body["shots"]
+    assert len(shots) > 0
+    goals = [s for s in shots if s["outcome"] == "Goal"]
+    assert len(goals) == 1
+    goal = goals[0]
+    assert goal["minute"] == 53
+    assert goal["team_id"] == body["away_team"]["id"]  # Barcelona
+    assert "Su" in goal["player_name"]  # Luis Suarez (accented in the data)
+    assert goal["x"] > 100  # own attacking frame: near the goal at x=120
+    assert goal["xg"] > 0
+    # every shot in the match, both teams, is in its own attacking frame
+    assert all(s["x"] > 60 for s in shots)

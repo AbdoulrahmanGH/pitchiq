@@ -66,14 +66,20 @@ def build_team_info_response(team_name, competition_name, season_name):
     }
 
 
-def build_match_detail_response(match_row, team_names_by_id, stats_rows, players_by_id):
+def build_match_detail_response(match_row, team_names_by_id, stats_rows, players_by_id,
+                                shot_rows=None):
     """match_row: single `matches` row. team_names_by_id: {team_id: name}.
     stats_rows: player_match_stats rows for this match_id, both teams mixed
     together. players_by_id: {player_id: {"name", "nickname"}}.
+    shot_rows: match_events rows for this match_id with event_type='Shot',
+    both teams mixed together.
 
     Splits the mixed stats_rows into a per-team lineup, each entry carrying
     the real name/nickname/goals/assists for that match -- this is what
-    powers the match modal's "who scored, who assisted" view.
+    powers the match modal's "who scored, who assisted" view. shot_rows pass
+    through as a flat `shots` list (raw StatsBomb pitch coordinates -- each
+    shot is in its own team's attacking frame, toward x=120; the frontend
+    mirrors one team for display) with player names resolved.
     """
     def lineup_for(team_id):
         entries = []
@@ -93,6 +99,21 @@ def build_match_detail_response(match_row, team_names_by_id, stats_rows, players
         entries.sort(key=lambda p: p["minutes_played"], reverse=True)
         return entries
 
+    shots = []
+    for s in shot_rows or []:
+        meta = players_by_id.get(s["player_id"], {})
+        shots.append({
+            "player_id": s["player_id"],
+            "player_name": meta.get("nickname") or meta.get("name"),
+            "team_id": s["team_id"],
+            "minute": s["minute"],
+            "x": s["x"],
+            "y": s["y"],
+            "outcome": s["outcome"],
+            "xg": s["xg"],
+        })
+    shots.sort(key=lambda s: s["minute"])
+
     home_id = match_row["home_team_id"]
     away_id = match_row["away_team_id"]
     return {
@@ -111,6 +132,7 @@ def build_match_detail_response(match_row, team_names_by_id, stats_rows, players
             "score": match_row["away_score"],
             "lineup": lineup_for(away_id),
         },
+        "shots": shots,
     }
 
 
@@ -153,13 +175,19 @@ def get_match_detail(match_id: int, _user: AuthenticatedUser = Depends(get_curre
         "player_id, team_id, position, minutes_played, goals, assists"
     ).eq("match_id", match_id).execute().data
 
-    player_ids = list({r["player_id"] for r in stats_rows})
+    shot_rows = supabase.table("match_events").select(
+        "player_id, team_id, minute, x, y, outcome, xg"
+    ).eq("match_id", match_id).eq("event_type", "Shot").execute().data
+
+    player_ids = list({r["player_id"] for r in stats_rows}
+                      | {s["player_id"] for s in shot_rows})
     players_rows = supabase.table("players").select("id, name, nickname").in_(
         "id", player_ids
     ).execute().data if player_ids else []
     players_by_id = {p["id"]: {"name": p["name"], "nickname": p["nickname"]} for p in players_rows}
 
-    return build_match_detail_response(match_row, team_names_by_id, stats_rows, players_by_id)
+    return build_match_detail_response(match_row, team_names_by_id, stats_rows, players_by_id,
+                                       shot_rows)
 
 
 @team_router.get("/readiness")

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Modal, { ModalCloseButton } from './Modal';
 import Avatar from './Avatar';
 import Skeleton from './Skeleton';
+import ShotMap from './ShotMap';
 import { getMatchDetail } from '../services/api';
 
 function formatDate(dateStr) {
@@ -74,11 +75,11 @@ export default function MatchModal({ matchId, open, onClose }) {
   }, [open, matchId]);
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth={640}>
+    <Modal open={open} onClose={onClose} maxWidth={680}>
       <div style={{ padding: '20px 22px', display: 'flex', alignItems: 'center', gap: 14, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>
-            Match Lineups
+            Match Detail
           </div>
           {detail && (
             <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -108,11 +109,21 @@ export default function MatchModal({ matchId, open, onClose }) {
         )}
 
         {!loading && !error && detail && (
-          <div style={{ display: 'flex', gap: 24 }}>
-            <TeamColumn team={detail.home_team} />
-            <div style={{ width: 1, background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
-            <TeamColumn team={detail.away_team} />
-          </div>
+          <>
+            {detail.shots?.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
+                  Shot Map
+                </div>
+                <ShotMap shots={detail.shots} homeTeam={detail.home_team} awayTeam={detail.away_team} />
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 24 }}>
+              <TeamColumn team={detail.home_team} />
+              <div style={{ width: 1, background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+              <TeamColumn team={detail.away_team} />
+            </div>
+          </>
         )}
       </div>
     </Modal>
