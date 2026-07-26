@@ -7,6 +7,7 @@ import pytest
 from app.routers.players import (
     BUCKET_ORDER,
     aggregate_performance,
+    attach_team_names,
     bucket_position,
     build_depth_response,
 )
@@ -83,14 +84,14 @@ def test_depth_entries_include_player_name():
 
 def test_performance_rows_include_name_and_nickname():
     stats_rows = [
-        {"player_id": 5503, "minutes_played": 90, "passes_attempted": 40,
+        {"player_id": 5503, "team_id": 217, "minutes_played": 90, "passes_attempted": 40,
          "passes_completed": 35, "key_passes": 2, "progressive_passes": 5,
          "shots": 3, "goals": 1, "xg": 0.4, "xa": 0.2, "assists": 0,
          "dribbles_attempted": 4, "dribbles_completed": 3,
          "progressive_carries": 2, "tackles": 0,
          "pressures": 5, "pressure_regains": 1},
     ]
-    players_by_id = {5503: {"name": "Lionel Messi", "nickname": None}}
+    players_by_id = {5503: {"name": "Lionel Messi", "nickname": None, "primary_position": "Right Wing"}}
 
     result = aggregate_performance(stats_rows, players_by_id)
 
@@ -102,6 +103,8 @@ def test_performance_rows_include_name_and_nickname():
     assert result[0]["total_goals"] == 1
     assert result[0]["xg"] == pytest.approx(0.4)
     assert result[0]["dribble_success_rate"] == pytest.approx(75.0)
+    assert result[0]["team_id"] == 217
+    assert result[0]["position_bucket"] == "Forward"
 
 
 # ------------------------------ bug 3: assists ------------------------------
@@ -111,20 +114,20 @@ def test_performance_rows_sum_real_assists_across_matches():
     # events, backfilled via migrations/0001) -- not derived from key_passes,
     # which also counts shot_assist passes that never became a goal.
     stats_rows = [
-        {"player_id": 5503, "minutes_played": 90, "passes_attempted": 40,
+        {"player_id": 5503, "team_id": 217, "minutes_played": 90, "passes_attempted": 40,
          "passes_completed": 35, "key_passes": 2, "progressive_passes": 5,
          "shots": 3, "goals": 1, "xg": 0.4, "xa": 0.2, "assists": 1,
          "dribbles_attempted": 4, "dribbles_completed": 3,
          "progressive_carries": 2, "tackles": 0,
          "pressures": 5, "pressure_regains": 1},
-        {"player_id": 5503, "minutes_played": 90, "passes_attempted": 30,
+        {"player_id": 5503, "team_id": 217, "minutes_played": 90, "passes_attempted": 30,
          "passes_completed": 28, "key_passes": 1, "progressive_passes": 3,
          "shots": 1, "goals": 0, "xg": 0.1, "xa": 0.0, "assists": 2,
          "dribbles_attempted": 2, "dribbles_completed": 1,
          "progressive_carries": 1, "tackles": 1,
          "pressures": 3, "pressure_regains": 0},
     ]
-    players_by_id = {5503: {"name": "Lionel Messi", "nickname": None}}
+    players_by_id = {5503: {"name": "Lionel Messi", "nickname": None, "primary_position": "Right Wing"}}
 
     result = aggregate_performance(stats_rows, players_by_id)
 
@@ -135,22 +138,59 @@ def test_performance_rows_sum_real_assists_across_matches():
 
 def test_performance_rows_sum_pressures_and_pressure_regains_across_matches():
     stats_rows = [
-        {"player_id": 5503, "minutes_played": 90, "passes_attempted": 40,
+        {"player_id": 5503, "team_id": 217, "minutes_played": 90, "passes_attempted": 40,
          "passes_completed": 35, "key_passes": 2, "progressive_passes": 5,
          "shots": 3, "goals": 1, "xg": 0.4, "xa": 0.2, "assists": 0,
          "dribbles_attempted": 4, "dribbles_completed": 3,
          "progressive_carries": 2, "tackles": 0,
          "pressures": 12, "pressure_regains": 3},
-        {"player_id": 5503, "minutes_played": 90, "passes_attempted": 30,
+        {"player_id": 5503, "team_id": 217, "minutes_played": 90, "passes_attempted": 30,
          "passes_completed": 28, "key_passes": 1, "progressive_passes": 3,
          "shots": 1, "goals": 0, "xg": 0.1, "xa": 0.0, "assists": 0,
          "dribbles_attempted": 2, "dribbles_completed": 1,
          "progressive_carries": 1, "tackles": 1,
          "pressures": 8, "pressure_regains": 2},
     ]
-    players_by_id = {5503: {"name": "Lionel Messi", "nickname": None}}
+    players_by_id = {5503: {"name": "Lionel Messi", "nickname": None, "primary_position": "Right Wing"}}
 
     result = aggregate_performance(stats_rows, players_by_id)
 
     assert result[0]["total_pressures"] == 20
     assert result[0]["total_pressure_regains"] == 5
+
+
+# --------------------- opponent visibility: team_id / position_bucket ---------------------
+
+def test_performance_rows_position_bucket_is_none_when_unresolvable():
+    stats_rows = [
+        {"player_id": 42, "team_id": 999, "minutes_played": 10, "passes_attempted": 0,
+         "passes_completed": 0, "key_passes": 0, "progressive_passes": 0,
+         "shots": 0, "goals": 0, "xg": 0.0, "xa": 0.0, "assists": 0,
+         "dribbles_attempted": 0, "dribbles_completed": 0,
+         "progressive_carries": 0, "tackles": 0,
+         "pressures": 0, "pressure_regains": 0},
+    ]
+    players_by_id = {42: {"name": "Mystery Sub", "nickname": None, "primary_position": None}}
+
+    result = aggregate_performance(stats_rows, players_by_id)
+
+    assert result[0]["team_id"] == 999
+    assert result[0]["position_bucket"] is None
+
+
+def test_attach_team_names_resolves_team_id_to_name():
+    rows = [{"player_id": 1, "team_id": 217}, {"player_id": 2, "team_id": 215}]
+    teams_by_id = {217: "Barcelona", 215: "Athletic Club"}
+
+    result = attach_team_names(rows, teams_by_id)
+
+    assert result[0]["team_name"] == "Barcelona"
+    assert result[1]["team_name"] == "Athletic Club"
+
+
+def test_attach_team_names_is_none_for_unknown_team_id():
+    rows = [{"player_id": 1, "team_id": 999}]
+
+    result = attach_team_names(rows, {})
+
+    assert result[0]["team_name"] is None

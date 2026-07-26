@@ -88,6 +88,7 @@ def aggregate_performance(stats_rows, players_by_id):
         if pid not in aggregated:
             aggregated[pid] = {
                 "player_id": pid,
+                "team_id": row["team_id"],
                 "total_minutes": 0,
                 "total_goals": 0,
                 "total_assists": 0,
@@ -135,18 +136,26 @@ def aggregate_performance(stats_rows, players_by_id):
         meta = players_by_id.get(p["player_id"], {})
         p["name"] = meta.get("name")
         p["nickname"] = meta.get("nickname")
+        p["position_bucket"] = bucket_position(meta.get("primary_position"))
         result.append(p)
 
     return result
 
 
+def attach_team_names(performance_rows, teams_by_id):
+    for row in performance_rows:
+        row["team_name"] = teams_by_id.get(row["team_id"])
+    return performance_rows
+
+
 def _players_by_id(client, player_ids):
     if not player_ids:
         return {}
-    rows = client.table("players").select("id, name, nickname").in_(
+    rows = client.table("players").select("id, name, nickname, primary_position").in_(
         "id", list(player_ids)
     ).execute().data
-    return {r["id"]: {"name": r["name"], "nickname": r["nickname"]} for r in rows}
+    return {r["id"]: {"name": r["name"], "nickname": r["nickname"],
+                      "primary_position": r["primary_position"]} for r in rows}
 
 
 @router.get("/performance")
@@ -154,14 +163,18 @@ def get_player_performance(_user: AuthenticatedUser = Depends(get_current_user))
     supabase = get_db()
 
     stats_rows = supabase.table("player_match_stats").select(
-        "player_id, minutes_played, passes_attempted, passes_completed, "
+        "player_id, team_id, minutes_played, passes_attempted, passes_completed, "
         "key_passes, progressive_passes, shots, goals, assists, xg, xa, "
         "dribbles_attempted, dribbles_completed, progressive_carries, tackles, "
         "pressures, pressure_regains"
-    ).eq("team_id", BARCELONA_TEAM_ID).execute().data
+    ).execute().data
 
     players_by_id = _players_by_id(supabase, {r["player_id"] for r in stats_rows})
-    return aggregate_performance(stats_rows, players_by_id)
+    performance = aggregate_performance(stats_rows, players_by_id)
+
+    teams_rows = supabase.table("teams").select("id, name").execute().data
+    teams_by_id = {t["id"]: t["name"] for t in teams_rows}
+    return attach_team_names(performance, teams_by_id)
 
 
 @router.get("/fatigue-risk")
