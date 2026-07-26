@@ -279,8 +279,6 @@ def _transform_match(match, events, lineups, teams, players,
             if pas.get("shot_assist") or pas.get("goal_assist"):
                 ps["key_passes"] += 1
                 ps["xa"] += shot_xg_by_id.get(pas.get("assisted_shot_id"), 0.0)
-            if pas.get("goal_assist"):
-                ps["assists"] += 1
                 match_events.append({
                     "match_id": match_id, "player_id": pid, "team_id": team_id,
                     "event_type": "Pass", "minute": e["minute"],
@@ -290,6 +288,8 @@ def _transform_match(match, events, lineups, teams, players,
                     "xg": None,
                     "under_pressure": bool(e.get("under_pressure", False)),
                 })
+            if pas.get("goal_assist"):
+                ps["assists"] += 1
             if loc and _is_progressive(loc, pas["end_location"]):
                 ps["progressive_passes"] += 1
             if loc and loc[0] <= PPDA_OPP_PASS_MAX_X:

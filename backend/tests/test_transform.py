@@ -434,3 +434,82 @@ def test_match_events_rows(result):
     assert kp["player_id"] == 5503
     assert kp["outcome"] == "Complete"
     assert kp["end_x"] == pytest.approx(85.0)
+
+
+# --------------------- regression: key pass that missed ---------------------
+# Every Pass fixture above has shot_assist and goal_assist equal (both True
+# for Messi's assist), so a bug that gates match_events on goal_assist alone
+# instead of (shot_assist or goal_assist) can't be caught by them -- the two
+# conditions agree by coincidence. This match isolates shot_assist=True,
+# goal_assist=False (a key pass whose shot did not score) specifically to
+# catch that.
+
+MATCH_3 = {
+    "match_id": 3,
+    "match_date": "2015-10-03",
+    "competition": {"competition_id": 11, "country_name": "Spain",
+                    "competition_name": "La Liga"},
+    "season": {"season_id": 27, "season_name": "2015/2016"},
+    "home_team": {"home_team_id": 217, "home_team_name": "Barcelona",
+                  "country": {"id": 214, "name": "Spain"}},
+    "away_team": {"away_team_id": 999, "away_team_name": "Test FC",
+                  "country": {"id": 68, "name": "Testland"}},
+    "home_score": 0,
+    "away_score": 0,
+    "match_week": 5,
+    "stadium": {"id": 342, "name": "Camp Nou", "country": {"id": 214, "name": "Spain"}},
+}
+
+EVENTS_3 = [
+    starting_xi(1, BARCA, [(MESSI, "Right Wing"), (SUAREZ, "Center Forward")]),
+    starting_xi(2, OPP, [(OPP_CB, "Center Back")]),
+    ev(3, 30, "Pass", BARCA, "00:10:00.000", 10, 0, player=MESSI,
+       location=[50.0, 40.0], possession=2,
+       **{"pass": {"recipient": SUAREZ, "length": 35.0, "angle": 0.0,
+                   "height": {"id": 1, "name": "Ground Pass"},
+                   "end_location": [85.0, 40.0],
+                   "shot_assist": True, "goal_assist": False,
+                   "assisted_shot_id": "shot-3"}}),
+    ev(4, 16, "Shot", BARCA, "00:10:04.000", 10, 4, player=SUAREZ,
+       location=[108.0, 40.0], possession=2, id="shot-3",
+       shot={"statsbomb_xg": 0.3, "end_location": [120.0, 42.0, 1.5],
+             "outcome": {"id": 98, "name": "Off T"},
+             "type": {"id": 87, "name": "Open Play"},
+             "key_pass_id": "ev-3"}),
+]
+
+LINEUPS_3 = [
+    {"team_id": 217, "team_name": "Barcelona", "lineup": [
+        {"player_id": 5503, "player_name": "Lionel Messi",
+         "player_nickname": None, "jersey_number": 10,
+         "country": {"id": 32, "name": "Argentina"}},
+        {"player_id": 5246, "player_name": "Luis Suarez",
+         "player_nickname": None, "jersey_number": 9,
+         "country": {"id": 242, "name": "Uruguay"}},
+    ]},
+    {"team_id": 999, "team_name": "Test FC", "lineup": [
+        {"player_id": 9001, "player_name": "Opp Defender",
+         "player_nickname": None, "jersey_number": 4,
+         "country": {"id": 68, "name": "Testland"}},
+    ]},
+]
+
+
+def test_match_events_includes_key_pass_that_did_not_become_a_goal():
+    result3 = transform([MATCH_3], {3: EVENTS_3}, {3: LINEUPS_3})
+    me = result3["match_events"]
+
+    pass_rows = me[(me["match_id"] == 3) & (me["event_type"] == "Pass")]
+    assert len(pass_rows) == 1
+    key_pass = pass_rows.iloc[0]
+    assert key_pass["player_id"] == 5503
+    assert key_pass["outcome"] == "Complete"
+    assert key_pass["end_x"] == pytest.approx(85.0)
+
+    shot_rows = me[(me["match_id"] == 3) & (me["event_type"] == "Shot")]
+    assert len(shot_rows) == 1
+
+    stats = result3["player_match_stats"]
+    messi_row = stats[stats["player_id"] == 5503].iloc[0]
+    assert messi_row["key_passes"] == 1
+    assert messi_row["assists"] == 0  # goal_assist is False -- no assist
