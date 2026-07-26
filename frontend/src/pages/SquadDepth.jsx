@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { getSquadDepth, getFatigueRisk } from '../services/api';
+import { getSquadDepth, getFatigueRisk, getTeamReadiness, getPlayerStatuses, postPlayerStatus } from '../services/api';
+import { useAuth } from '../services/AuthProvider';
+import CircularProgress from '../components/CircularProgress';
 
 const ACC = '#FF6B35';
 
@@ -11,7 +13,79 @@ const POSITIONS = [
   { key: 'Forward',    abbr: 'FWD', plural: 'Forwards',    colorHex: '#FF6B35', color: 'var(--orange)', dim: 'var(--orange-dim)' },
 ];
 
-function DepthCard({ pos, players, atRiskIds }) {
+const STATUS_META = {
+  available:   { label: 'AVAILABLE',   color: 'var(--green)',  bg: 'var(--green-dim)'  },
+  doubtful:    { label: 'DOUBTFUL',    color: 'var(--yellow)', bg: 'var(--yellow-dim)' },
+  unavailable: { label: 'UNAVAILABLE', color: 'var(--red)',    bg: 'var(--red-dim)'    },
+};
+
+function StatusBadge({ status }) {
+  const meta = STATUS_META[status];
+  if (!meta) return null;
+  return (
+    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 6px', borderRadius: 5, background: meta.bg, color: meta.color, whiteSpace: 'nowrap' }}>
+      {meta.label}
+    </span>
+  );
+}
+
+function StatusSelect({ playerId, status, onSaved }) {
+  const [saving, setSaving] = useState(false);
+  const handle = async (e) => {
+    const next = e.target.value;
+    setSaving(true);
+    try {
+      await postPlayerStatus(playerId, next);
+      onSaved(playerId, next);
+    } catch {
+      // best-effort UI -- a failed save just leaves the dropdown at its
+      // current value, no destructive local state change to undo
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <select
+      value={status || 'available'}
+      onChange={handle}
+      disabled={saving}
+      style={{
+        fontSize: 10, fontWeight: 600, padding: '3px 5px', borderRadius: 5,
+        background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)',
+        border: '1px solid rgba(255,255,255,0.12)', outline: 'none',
+        cursor: saving ? 'default' : 'pointer', flexShrink: 0,
+      }}
+    >
+      <option value="available">Available</option>
+      <option value="doubtful">Doubtful</option>
+      <option value="unavailable">Unavailable</option>
+    </select>
+  );
+}
+
+function ReadinessCard({ readiness }) {
+  const score = readiness?.readiness_score ?? 0;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 22,
+      background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)',
+      border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16,
+      padding: '20px 24px', marginBottom: 24, boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+    }}>
+      <CircularProgress value={score} />
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+          Squad Readiness
+        </div>
+        <div style={{ fontSize: 12, color: '#8B949E', marginTop: 5 }}>
+          {readiness?.at_risk_players?.length ?? 0} fatigue-flagged · {readiness?.unavailable_players?.length ?? 0} unavailable · {readiness?.doubtful_players?.length ?? 0} doubtful
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DepthCard({ pos, players, atRiskIds, statusByPlayerId, isCoach, onStatusSaved }) {
   const [hov, setHov] = useState(false);
   const count = players.length;
   const lowDepth = count < 3;
@@ -58,9 +132,10 @@ function DepthCard({ pos, players, atRiskIds }) {
 
         <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', marginBottom: 14 }} />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {players.map(p => {
             const isRisk = atRiskIds.has(p.id);
+            const status = statusByPlayerId[p.id];
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 22, height: 22, borderRadius: 6, background: 'linear-gradient(135deg, #252D3A, #1A2030)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontFamily: 'Space Grotesk', fontWeight: 700, color: '#8B949E', flexShrink: 0 }}>
@@ -68,6 +143,11 @@ function DepthCard({ pos, players, atRiskIds }) {
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 500, color: '#E6EDF3', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: isRisk ? 'var(--yellow)' : 'var(--green)', flexShrink: 0, boxShadow: `0 0 4px ${isRisk ? 'var(--yellow)' : 'var(--green)'}` }} />
+                {isCoach ? (
+                  <StatusSelect playerId={p.id} status={status} onSaved={onStatusSaved} />
+                ) : (
+                  status && status !== 'available' && <StatusBadge status={status} />
+                )}
               </div>
             );
           })}
@@ -94,17 +174,31 @@ const CustomTooltip = ({ active, payload }) => {
 };
 
 export default function SquadDepth() {
-  const [depth,    setDepth]    = useState(null);
-  const [fatigue,  setFatigue]  = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState(null);
+  const { role } = useAuth();
+  const isCoach = role === 'coach';
+  const [depth,     setDepth]     = useState(null);
+  const [fatigue,   setFatigue]   = useState([]);
+  const [readiness, setReadiness] = useState(null);
+  const [statusByPlayerId, setStatusByPlayerId] = useState({});
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState(null);
 
   useEffect(() => {
-    Promise.all([getSquadDepth(), getFatigueRisk()])
-      .then(([d, f]) => { setDepth(d); setFatigue(f); })
+    Promise.all([getSquadDepth(), getFatigueRisk(), getTeamReadiness(), getPlayerStatuses()])
+      .then(([d, f, r, statuses]) => {
+        setDepth(d);
+        setFatigue(f);
+        setReadiness(r);
+        setStatusByPlayerId(Object.fromEntries(statuses.map(s => [s.player_id, s.status])));
+      })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleStatusSaved = (playerId, status) => {
+    setStatusByPlayerId(prev => ({ ...prev, [playerId]: status }));
+    getTeamReadiness().then(setReadiness).catch(() => {});
+  };
 
   const atRiskIds = new Set(fatigue.map(p => p.player_id));
 
@@ -113,8 +207,6 @@ export default function SquadDepth() {
     count:    (depth[p.key] || []).length,
     colorHex: p.colorHex,
   })) : [];
-  // Scale to the real data instead of an arbitrary fixed max -- a squad
-  // with more than 12 in one position would otherwise render off-scale.
   const chartMax = Math.max(12, ...chartData.map(d => d.count)) + 2;
 
   return (
@@ -122,7 +214,9 @@ export default function SquadDepth() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '0 20px', minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Squad Depth</div>
-          <div style={{ fontSize: 11, color: '#8B949E', marginTop: 1 }}>Position availability across the squad</div>
+          <div style={{ fontSize: 11, color: '#8B949E', marginTop: 1 }}>
+            {isCoach ? 'Position availability — set player status inline' : 'Position availability across the squad'}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {[['var(--green)', 'FIT'], ['var(--yellow)', 'AT RISK']].map(([c, l]) => (
@@ -145,6 +239,8 @@ export default function SquadDepth() {
 
         {!loading && !error && depth && (
           <>
+            <ReadinessCard readiness={readiness} />
+
             <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
               {POSITIONS.map(pos => {
                 const ids = depth[pos.key] || [];
@@ -202,6 +298,9 @@ export default function SquadDepth() {
                   pos={pos}
                   players={depth[pos.key] || []}
                   atRiskIds={atRiskIds}
+                  statusByPlayerId={statusByPlayerId}
+                  isCoach={isCoach}
+                  onStatusSaved={handleStatusSaved}
                 />
               ))}
             </div>
