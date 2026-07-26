@@ -5,6 +5,7 @@ from app.routers.analytics import analytics_router
 from app.routers.auth_router import router as auth_router
 from app.routers.matches import matches_router, team_router
 from app.routers.pipeline import pipeline_router
+from app.routers.scouting import router as scouting_router
 app = FastAPI(title="PitchIQ API")
 
 
@@ -28,3 +29,4 @@ app.include_router(matches_router)
 app.include_router(team_router)
 app.include_router(analytics_router)
 app.include_router(pipeline_router)
+app.include_router(scouting_router)
