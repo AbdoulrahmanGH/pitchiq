@@ -114,7 +114,35 @@ def test_team_info_returns_real_team_competition_and_season():
         "team_name": "Barcelona",
         "competition_name": "La Liga",
         "season_name": "2015/2016",
+        "season_ppda_avg": None,
+        "season_field_tilt_avg": None,
     }
+
+
+def test_team_info_averages_ppda_and_field_tilt_across_season():
+    team_stats_rows = [
+        {"ppda": 10.0, "field_tilt_pct": 60.0},
+        {"ppda": 8.0, "field_tilt_pct": 70.0},
+    ]
+
+    result = build_team_info_response("Barcelona", "La Liga", "2015/2016", team_stats_rows)
+
+    assert result["season_ppda_avg"] == 9.0
+    assert result["season_field_tilt_avg"] == 65.0
+
+
+def test_team_info_ignores_null_ppda_and_field_tilt_in_average():
+    # A zero-denominator match stores null (see pipeline_v2), never 0 -- a
+    # null must not drag the season average toward zero.
+    team_stats_rows = [
+        {"ppda": 10.0, "field_tilt_pct": None},
+        {"ppda": None, "field_tilt_pct": 70.0},
+    ]
+
+    result = build_team_info_response("Barcelona", "La Liga", "2015/2016", team_stats_rows)
+
+    assert result["season_ppda_avg"] == 10.0
+    assert result["season_field_tilt_avg"] == 70.0
 
 
 # --------------------------- match detail (lineups, scorers, assists) ---------------------------
@@ -199,3 +227,27 @@ def test_match_detail_without_shot_rows_returns_empty_shots():
     result = build_match_detail_response(MATCH_ROW, DETAIL_TEAM_NAMES, [], DETAIL_PLAYERS_BY_ID)
 
     assert result["shots"] == []
+
+
+def test_match_detail_attaches_ppda_and_field_tilt_per_team():
+    team_stats_rows = [
+        {"team_id": 215, "ppda": 12.4, "field_tilt_pct": 38.2},
+        {"team_id": 217, "ppda": 7.9, "field_tilt_pct": 61.8},
+    ]
+
+    result = build_match_detail_response(MATCH_ROW, DETAIL_TEAM_NAMES, [], DETAIL_PLAYERS_BY_ID,
+                                         team_stats_rows=team_stats_rows)
+
+    assert result["home_team"]["ppda"] == 12.4
+    assert result["home_team"]["field_tilt_pct"] == 38.2
+    assert result["away_team"]["ppda"] == 7.9
+    assert result["away_team"]["field_tilt_pct"] == 61.8
+
+
+def test_match_detail_without_team_stats_rows_returns_none_metrics():
+    result = build_match_detail_response(MATCH_ROW, DETAIL_TEAM_NAMES, [], DETAIL_PLAYERS_BY_ID)
+
+    assert result["home_team"]["ppda"] is None
+    assert result["home_team"]["field_tilt_pct"] is None
+    assert result["away_team"]["ppda"] is None
+    assert result["away_team"]["field_tilt_pct"] is None

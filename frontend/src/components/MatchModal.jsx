@@ -42,6 +42,63 @@ function LineupRow({ player }) {
   );
 }
 
+function MetricTile({ label, homeVal, awayVal, homeTeam, awayTeam, suffix, lowerIsBetter }) {
+  if (homeVal == null && awayVal == null) return null;
+  const homeBetter = homeVal != null && awayVal != null && homeVal !== awayVal &&
+    (lowerIsBetter ? homeVal < awayVal : homeVal > awayVal);
+  const awayBetter = homeVal != null && awayVal != null && homeVal !== awayVal &&
+    (lowerIsBetter ? awayVal < homeVal : awayVal > homeVal);
+  const fmt = (v) => v == null ? '—' : `${v.toFixed(1)}${suffix || ''}`;
+  return (
+    <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '12px 16px' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: 10, textAlign: 'center' }}>
+        {label}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: 'Space Grotesk', fontSize: 19, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: homeBetter ? 'var(--green)' : 'var(--text-primary)' }}>
+            {fmt(homeVal)}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {homeTeam.name}
+          </div>
+        </div>
+        <div style={{ minWidth: 0, textAlign: 'right' }}>
+          <div style={{ fontFamily: 'Space Grotesk', fontSize: 19, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: awayBetter ? 'var(--green)' : 'var(--text-primary)' }}>
+            {fmt(awayVal)}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {awayTeam.name}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamMetrics({ homeTeam, awayTeam }) {
+  if (homeTeam.ppda == null && awayTeam.ppda == null &&
+      homeTeam.field_tilt_pct == null && awayTeam.field_tilt_pct == null) {
+    return null;
+  }
+  return (
+    <div style={{ display: 'flex', gap: 12 }}>
+      <MetricTile
+        label="PPDA (pressing intensity)"
+        homeVal={homeTeam.ppda} awayVal={awayTeam.ppda}
+        homeTeam={homeTeam} awayTeam={awayTeam}
+        lowerIsBetter
+      />
+      <MetricTile
+        label="Field Tilt"
+        homeVal={homeTeam.field_tilt_pct} awayVal={awayTeam.field_tilt_pct}
+        homeTeam={homeTeam} awayTeam={awayTeam}
+        suffix="%"
+      />
+    </div>
+  );
+}
+
 function TeamColumn({ team }) {
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -116,6 +173,12 @@ export default function MatchModal({ matchId, open, onClose }) {
                   Shot Map
                 </div>
                 <ShotMap shots={detail.shots} homeTeam={detail.home_team} awayTeam={detail.away_team} />
+              </div>
+            )}
+            {(detail.home_team.ppda != null || detail.away_team.ppda != null ||
+              detail.home_team.field_tilt_pct != null || detail.away_team.field_tilt_pct != null) && (
+              <div style={{ marginBottom: 24 }}>
+                <TeamMetrics homeTeam={detail.home_team} awayTeam={detail.away_team} />
               </div>
             )}
             <div style={{ display: 'flex', gap: 24 }}>

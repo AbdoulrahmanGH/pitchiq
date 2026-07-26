@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { getTeamReadiness, getMatchesSummary, getSquadDepth, getTeamInfo } from '../services/api';
+import { getTeamReadiness, getMatchesSummary, getSquadDepth, getTeamInfo, getPlayerPerformance } from '../services/api';
 import { POS_ABBREV, POS_COLORS } from '../constants';
 import Skeleton from '../components/Skeleton';
+import Avatar from '../components/Avatar';
 
 const RECENT_MINUTES_MAX = 270; // 3 full 90-minute matches -- matches the "last 3 fixtures" workload window
 
@@ -154,6 +155,56 @@ function LastMatchCard({ match, teamName }) {
   );
 }
 
+function SeasonSnapshotCard({ teamInfo, topPerformers, positionByPlayerId }) {
+  const ppda = teamInfo?.season_ppda_avg;
+  const tilt = teamInfo?.season_field_tilt_avg;
+  return (
+    <div style={{ background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '20px 22px 22px', flex: '0 0 340px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <div style={{ width: 3, height: 18, background: ACC, borderRadius: 2 }} />
+        <div style={{ fontFamily: 'Space Grotesk', fontSize: 15, fontWeight: 600 }}>Season Snapshot</div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+        <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: 5 }}>PPDA · SEASON AVG</div>
+          <div style={{ fontFamily: 'Space Grotesk', fontSize: 21, fontWeight: 700, color: ACC, fontVariantNumeric: 'tabular-nums' }}>
+            {ppda != null ? ppda.toFixed(1) : '—'}
+          </div>
+        </div>
+        <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: 5 }}>FIELD TILT · SEASON AVG</div>
+          <div style={{ fontFamily: 'Space Grotesk', fontSize: 21, fontWeight: 700, color: ACC, fontVariantNumeric: 'tabular-nums' }}>
+            {tilt != null ? `${tilt.toFixed(1)}%` : '—'}
+          </div>
+        </div>
+      </div>
+
+      {topPerformers.length > 0 && (
+        <>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: 10 }}>
+            Top Performers · xG
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {topPerformers.map((p, i) => (
+              <div key={p.player_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 14, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'center', flexShrink: 0 }}>{i + 1}</div>
+                <Avatar name={p.name} pos={POS_ABBREV[positionByPlayerId[p.player_id]]} size={28} />
+                <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {p.name}
+                </div>
+                <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: 'var(--green)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                  {p.xg.toFixed(2)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function RecordDisplay({ matches }) {
   const wins   = matches.filter(m => m.result === 'win').length;
   const draws  = matches.filter(m => m.result === 'draw').length;
@@ -171,16 +222,17 @@ function RecordDisplay({ matches }) {
 }
 
 export default function Dashboard() {
-  const [readiness, setReadiness] = useState(null);
-  const [matches,   setMatches]   = useState([]);
-  const [depth,     setDepth]     = useState(null);
-  const [teamInfo,  setTeamInfo]  = useState(null);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState(null);
+  const [readiness,   setReadiness]   = useState(null);
+  const [matches,     setMatches]     = useState([]);
+  const [depth,       setDepth]       = useState(null);
+  const [teamInfo,    setTeamInfo]    = useState(null);
+  const [performance, setPerformance] = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
 
   useEffect(() => {
-    Promise.all([getTeamReadiness(), getMatchesSummary(), getSquadDepth(), getTeamInfo()])
-      .then(([r, m, d, t]) => { setReadiness(r); setMatches(m); setDepth(d); setTeamInfo(t); })
+    Promise.all([getTeamReadiness(), getMatchesSummary(), getSquadDepth(), getTeamInfo(), getPlayerPerformance()])
+      .then(([r, m, d, t, perf]) => { setReadiness(r); setMatches(m); setDepth(d); setTeamInfo(t); setPerformance(perf); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -202,6 +254,11 @@ export default function Dashboard() {
   const lastMatch = matches.length
     ? [...matches].sort((a, b) => new Date(b.date) - new Date(a.date))[0]
     : null;
+
+  const topPerformers = [...performance]
+    .filter(p => (p.xg || 0) > 0)
+    .sort((a, b) => (b.xg || 0) - (a.xg || 0))
+    .slice(0, 3);
 
   const wins   = matches.filter(m => m.result === 'win').length;
   const draws  = matches.filter(m => m.result === 'draw').length;
@@ -280,8 +337,18 @@ export default function Dashboard() {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-              {lastMatch && <LastMatchCard match={lastMatch} teamName={teamName} />}
+            {/* alignItems: flex-start -- without it the flex row stretches this
+                column to match Recent Form's height (the full un-scrolled
+                match list), leaving a large blank rectangle below whatever
+                short content sits in this column. Season Snapshot fills that
+                space with real content; flex-start keeps both columns at
+                their own natural height instead of one stretching to match
+                the other. */}
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18, flex: '0 0 340px' }}>
+                {lastMatch && <LastMatchCard match={lastMatch} teamName={teamName} />}
+                <SeasonSnapshotCard teamInfo={teamInfo} topPerformers={topPerformers} positionByPlayerId={positionByPlayerId} />
+              </div>
 
               <div style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden' }}>
                 <div style={{ padding: '20px 20px 0' }}>

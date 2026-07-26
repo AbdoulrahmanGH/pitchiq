@@ -94,6 +94,8 @@ def aggregate_performance(stats_rows, players_by_id):
                 "total_progressive_passes": 0,
                 "total_progressive_carries": 0,
                 "total_tackles": 0,
+                "total_pressures": 0,
+                "total_pressure_regains": 0,
                 "xg": 0.0,
                 "xa": 0.0,
                 "matches_played": 0,
@@ -111,6 +113,8 @@ def aggregate_performance(stats_rows, players_by_id):
         p["total_progressive_passes"] += row["progressive_passes"] or 0
         p["total_progressive_carries"] += row["progressive_carries"] or 0
         p["total_tackles"] += row["tackles"] or 0
+        p["total_pressures"] += row["pressures"] or 0
+        p["total_pressure_regains"] += row["pressure_regains"] or 0
         p["xg"] += row["xg"] or 0.0
         p["xa"] += row["xa"] or 0.0
         p["matches_played"] += 1
@@ -148,7 +152,8 @@ def get_player_performance(_user: AuthenticatedUser = Depends(get_current_user))
     stats_rows = supabase.table("player_match_stats").select(
         "player_id, minutes_played, passes_attempted, passes_completed, "
         "key_passes, progressive_passes, shots, goals, assists, xg, xa, "
-        "dribbles_attempted, dribbles_completed, progressive_carries, tackles"
+        "dribbles_attempted, dribbles_completed, progressive_carries, tackles, "
+        "pressures, pressure_regains"
     ).eq("team_id", BARCELONA_TEAM_ID).execute().data
 
     players_by_id = _players_by_id(supabase, {r["player_id"] for r in stats_rows})

@@ -60,6 +60,8 @@ export default function PlayerModal({ player, open, onClose }) {
           <StatTile label="Passes"              value={player.total_passes_attempted} />
           <StatTile label="Progressive Actions" value={progressiveActions} color="var(--purple)" />
           <StatTile label="Tackles"             value={player.total_tackles} />
+          <StatTile label="Pressures"           value={player.total_pressures} />
+          <StatTile label="Pressure Regains"    value={player.total_pressure_regains} color="var(--green)" />
         </div>
       </div>
     </Modal>

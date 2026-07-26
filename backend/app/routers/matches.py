@@ -53,33 +53,52 @@ def build_readiness_response(at_risk_players):
     return {"readiness_score": score, "at_risk_players": at_risk_players}
 
 
-def build_team_info_response(team_name, competition_name, season_name):
+def _average(values):
+    return round(sum(values) / len(values), 2) if values else None
+
+
+def build_team_info_response(team_name, competition_name, season_name,
+                             team_stats_rows=None):
     """Real values for what used to be hardcoded on the frontend (team name,
     league, season) -- team_name from the teams table, competition/season
     from any matches row since every match this squad plays is in the same
     competition/season.
+
+    team_stats_rows: this team's team_match_stats rows across the whole
+    season (ppda, field_tilt_pct only). Averaged for the Dashboard's Season
+    Snapshot -- both metrics are already computed and stored per match by
+    the pipeline, this just aggregates across matches. Nulls (a zero-
+    denominator match, see pipeline_v2's PPDA/field-tilt comments) are
+    excluded from the average rather than treated as 0.
     """
+    ppda_values = [r["ppda"] for r in (team_stats_rows or []) if r["ppda"] is not None]
+    tilt_values = [r["field_tilt_pct"] for r in (team_stats_rows or []) if r["field_tilt_pct"] is not None]
     return {
         "team_name": team_name,
         "competition_name": competition_name,
         "season_name": season_name,
+        "season_ppda_avg": _average(ppda_values),
+        "season_field_tilt_avg": _average(tilt_values),
     }
 
 
 def build_match_detail_response(match_row, team_names_by_id, stats_rows, players_by_id,
-                                shot_rows=None):
+                                shot_rows=None, team_stats_rows=None):
     """match_row: single `matches` row. team_names_by_id: {team_id: name}.
     stats_rows: player_match_stats rows for this match_id, both teams mixed
     together. players_by_id: {player_id: {"name", "nickname"}}.
     shot_rows: match_events rows for this match_id with event_type='Shot',
     both teams mixed together.
+    team_stats_rows: team_match_stats rows for this match_id, both teams
+    mixed together (team_id, ppda, field_tilt_pct).
 
     Splits the mixed stats_rows into a per-team lineup, each entry carrying
     the real name/nickname/goals/assists for that match -- this is what
     powers the match modal's "who scored, who assisted" view. shot_rows pass
     through as a flat `shots` list (raw StatsBomb pitch coordinates -- each
     shot is in its own team's attacking frame, toward x=120; the frontend
-    mirrors one team for display) with player names resolved.
+    mirrors one team for display) with player names resolved. team_stats_rows
+    attaches each team's own ppda/field_tilt_pct for this match.
     """
     def lineup_for(team_id):
         entries = []
@@ -114,6 +133,12 @@ def build_match_detail_response(match_row, team_names_by_id, stats_rows, players
         })
     shots.sort(key=lambda s: s["minute"])
 
+    team_stats_by_team_id = {r["team_id"]: r for r in (team_stats_rows or [])}
+
+    def team_metrics(team_id):
+        row = team_stats_by_team_id.get(team_id, {})
+        return {"ppda": row.get("ppda"), "field_tilt_pct": row.get("field_tilt_pct")}
+
     home_id = match_row["home_team_id"]
     away_id = match_row["away_team_id"]
     return {
@@ -125,12 +150,14 @@ def build_match_detail_response(match_row, team_names_by_id, stats_rows, players
             "name": team_names_by_id.get(home_id),
             "score": match_row["home_score"],
             "lineup": lineup_for(home_id),
+            **team_metrics(home_id),
         },
         "away_team": {
             "id": away_id,
             "name": team_names_by_id.get(away_id),
             "score": match_row["away_score"],
             "lineup": lineup_for(away_id),
+            **team_metrics(away_id),
         },
         "shots": shots,
     }
@@ -179,6 +206,10 @@ def get_match_detail(match_id: int, _user: AuthenticatedUser = Depends(get_curre
         "player_id, team_id, minute, x, y, outcome, xg"
     ).eq("match_id", match_id).eq("event_type", "Shot").execute().data
 
+    team_stats_rows = supabase.table("team_match_stats").select(
+        "team_id, ppda, field_tilt_pct"
+    ).eq("match_id", match_id).execute().data
+
     player_ids = list({r["player_id"] for r in stats_rows}
                       | {s["player_id"] for s in shot_rows})
     players_rows = supabase.table("players").select("id, name, nickname").in_(
@@ -187,7 +218,7 @@ def get_match_detail(match_id: int, _user: AuthenticatedUser = Depends(get_curre
     players_by_id = {p["id"]: {"name": p["name"], "nickname": p["nickname"]} for p in players_rows}
 
     return build_match_detail_response(match_row, team_names_by_id, stats_rows, players_by_id,
-                                       shot_rows)
+                                       shot_rows, team_stats_rows)
 
 
 @team_router.get("/readiness")
@@ -212,4 +243,8 @@ def get_team_info(_user: AuthenticatedUser = Depends(get_current_user)):
     competition_name = match_rows[0]["competition_name"] if match_rows else None
     season_name = match_rows[0]["season_name"] if match_rows else None
 
-    return build_team_info_response(team_name, competition_name, season_name)
+    team_stats_rows = supabase.table("team_match_stats").select(
+        "ppda, field_tilt_pct"
+    ).eq("team_id", BARCELONA_TEAM_ID).execute().data
+
+    return build_team_info_response(team_name, competition_name, season_name, team_stats_rows)
