@@ -58,7 +58,13 @@ create table player_match_stats (
   pressure_regains integer not null default 0,
   duels_won integer not null default 0,
   fouls_committed integer not null default 0,
-  fouls_won integer not null default 0
+  fouls_won integer not null default 0,
+  -- Every real pipeline run does a full delete-then-reinsert of this
+  -- table for every match (see load_v2.reload_table_for_matches), so
+  -- MAX(loaded_at) is a true "when did Postgres last get written" signal
+  -- with no application code needed to maintain it -- the DEFAULT alone
+  -- is enough, since these rows are never upserted in place.
+  loaded_at timestamptz not null default now()
 );
 
 create table team_match_stats (

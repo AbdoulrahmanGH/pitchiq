@@ -7,11 +7,12 @@ const COLLAPSED_W = 68;
 const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
 const NAV = [
-  { path: '/',        emoji: '🏠', label: 'Dashboard'   },
-  { path: '/players', emoji: '👤', label: 'Players'     },
-  { path: '/matches', emoji: '⚽', label: 'Matches'     },
-  { path: '/depth',   emoji: '📊', label: 'Squad Depth' },
-  { path: '/about',   emoji: '📖', label: 'About'       },
+  { path: '/',         emoji: '🏠', label: 'Dashboard'   },
+  { path: '/players',  emoji: '👤', label: 'Players'     },
+  { path: '/matches',  emoji: '⚽', label: 'Matches'     },
+  { path: '/depth',    emoji: '📊', label: 'Squad Depth' },
+  { path: '/pipeline', emoji: '🛠️', label: 'Pipeline'    },
+  { path: '/about',    emoji: '📖', label: 'About'       },
 ];
 
 const ROLE_LABELS = {
@@ -24,7 +25,7 @@ const ROLE_LABELS = {
 // since this step is only about which links show, not blocking direct
 // navigation to a route.
 const NAV_PATHS_BY_ROLE = {
-  analyst: ['/', '/players', '/matches', '/depth', '/about'],
+  analyst: ['/', '/players', '/matches', '/depth', '/pipeline', '/about'],
   coach:   ['/', '/players', '/matches', '/depth'],
   scout:   ['/players', '/matches', '/depth'],
 };
