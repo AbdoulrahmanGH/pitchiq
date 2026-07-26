@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends
+from datetime import datetime, timezone
+from typing import Literal, Optional
 
-from app.auth import AuthenticatedUser, get_current_user
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+
+from app.auth import AuthenticatedUser, get_current_user, require_role
 from app.db import get_db
 from app.services.fatigue import get_at_risk_players
 
@@ -180,3 +184,33 @@ def get_squad_depth(_user: AuthenticatedUser = Depends(get_current_user)):
     ).in_("id", player_ids).execute().data
 
     return build_depth_response(players_rows)
+
+
+class PlayerStatusUpdate(BaseModel):
+    player_id: int
+    status: Literal["available", "doubtful", "unavailable"]
+    note: Optional[str] = None
+
+
+@router.get("/status")
+def get_player_statuses(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+    return client.table("player_status").select(
+        "player_id, status, note, updated_by, updated_at"
+    ).execute().data
+
+
+@router.post("/status")
+def set_player_status(
+    body: PlayerStatusUpdate,
+    user: AuthenticatedUser = Depends(require_role("coach")),
+    client=Depends(get_db),
+):
+    payload = {
+        "player_id": body.player_id,
+        "status": body.status,
+        "note": body.note,
+        "updated_by": user.id,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    result = client.table("player_status").upsert(payload).execute()
+    return result.data[0] if result.data else payload
