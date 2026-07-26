@@ -56,9 +56,9 @@ function StatusSelect({ playerId, status, onSaved }) {
         cursor: saving ? 'default' : 'pointer', flexShrink: 0,
       }}
     >
-      <option value="available">Available</option>
-      <option value="doubtful">Doubtful</option>
-      <option value="unavailable">Unavailable</option>
+      <option value="available" style={{ background: '#1C2333', color: '#E6EDF3' }}>Available</option>
+      <option value="doubtful" style={{ background: '#1C2333', color: '#E6EDF3' }}>Doubtful</option>
+      <option value="unavailable" style={{ background: '#1C2333', color: '#E6EDF3' }}>Unavailable</option>
     </select>
   );
 }

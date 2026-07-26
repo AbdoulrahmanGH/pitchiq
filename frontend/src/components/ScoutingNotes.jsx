@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../services/AuthProvider';
 import { getScoutingNotes, postScoutingNote } from '../services/api';
+import { SCOUTING_RATING_LABELS } from '../constants';
 
 const ACC = '#FF6B35';
 
@@ -27,6 +28,16 @@ function RatingPicker({ value, onChange }) {
   );
 }
 
+function RatingScaleLegend() {
+  return (
+    <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+      {[1, 2, 3, 4, 5].map(n => (
+        <div key={n}>{n} = {SCOUTING_RATING_LABELS[n]}</div>
+      ))}
+    </div>
+  );
+}
+
 function NoteCard({ note }) {
   const dateStr = new Date(note.created_at).toLocaleDateString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
@@ -38,10 +49,11 @@ function NoteCard({ note }) {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-muted)' }}>SCOUT</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 700, color: ACC }}>{note.rating}/5</span>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{dateStr}</span>
-        </div>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{dateStr}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 700, color: ACC }}>{note.rating}/5</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>{SCOUTING_RATING_LABELS[note.rating]}</span>
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--text-primary)', lineHeight: 1.5 }}>{note.note}</div>
     </div>
@@ -110,8 +122,11 @@ export default function ScoutingNotes({ playerId }) {
               color: 'var(--text-primary)', outline: 'none', marginBottom: 10, boxSizing: 'border-box',
             }}
           />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-            <RatingPicker value={rating} onChange={setRating} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+              <RatingPicker value={rating} onChange={setRating} />
+              <RatingScaleLegend />
+            </div>
             <button
               onClick={handleSubmit}
               disabled={submitting || !draft.trim() || !rating}

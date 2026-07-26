@@ -62,7 +62,10 @@ export const getMatchDetail        = (matchId) => get(`/api/matches/${matchId}/d
 export const getPipelineStatus      = () => get('/api/pipeline/status');
 export const triggerPipelineRefresh = () => post('/api/pipeline/refresh');
 
-export const getScoutingNotes  = (playerId) => get(`/api/scouting/notes?player_id=${playerId}`);
+// Omit playerId to get every note the caller has authored, across all
+// players -- powers the Scout's "My Scouting Notes" view.
+export const getScoutingNotes  = (playerId) =>
+  get(playerId != null ? `/api/scouting/notes?player_id=${playerId}` : '/api/scouting/notes');
 export const postScoutingNote  = (playerId, note, rating) =>
   postJSON('/api/scouting/notes', { player_id: playerId, note, rating });
 export const getPlayerStatuses = () => get('/api/players/status');

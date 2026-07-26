@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { getPlayerPerformance, getFatigueRisk, getTeamInfo } from '../services/api';
+import { useAuth } from '../services/AuthProvider';
 import { POS_ABBREV, POS_COLORS } from '../constants';
 import Skeleton from '../components/Skeleton';
 import PlayerModal from '../components/PlayerModal';
+
+const DROPDOWN_OPTION_STYLE = { background: '#1C2333', color: '#E6EDF3' };
 
 const ACC = '#FF6B35';
 const POS_MAP = { GK: 'Goalkeeper', DEF: 'Defender', MID: 'Midfielder', FWD: 'Forward' };
@@ -150,6 +153,8 @@ function TableRow({ player, acc, maxShots, maxPasses, onSelect }) {
 }
 
 export default function Players() {
+  const { role } = useAuth();
+  const isCoach = role === 'coach';
   const [performance, setPerformance] = useState([]);
   const [fatigueRisk, setFatigueRisk] = useState([]);
   const [teamInfo, setTeamInfo] = useState(null);
@@ -177,11 +182,18 @@ export default function Players() {
   // (position_bucket/team_name) instead of the Barcelona-scoped /depth
   // endpoint -- that endpoint never carried opponents, so it couldn't
   // resolve their position at all.
-  const players = useMemo(() => performance.map(p => ({
-    ...p,
-    pos:  POS_ABBREV[p.position_bucket] || '???',
-    status: atRiskIds.has(p.player_id) ? 'AT RISK' : 'FIT',
-  })), [performance, atRiskIds]);
+  const players = useMemo(() => {
+    const all = performance.map(p => ({
+      ...p,
+      pos:  POS_ABBREV[p.position_bucket] || '???',
+      status: atRiskIds.has(p.player_id) ? 'AT RISK' : 'FIT',
+    }));
+    // Coach's scope is Barcelona-only everywhere else in the app
+    // (Dashboard, Squad Depth, the nav itself) -- Players stays consistent
+    // rather than being the one place a Coach can see opponent rosters.
+    // Analyst and Scout are unaffected; they need the full dataset.
+    return isCoach && teamInfo ? all.filter(p => p.team_name === teamInfo.team_name) : all;
+  }, [performance, atRiskIds, isCoach, teamInfo]);
 
   const teamOptions = useMemo(() => {
     const names = new Set(players.map(p => p.team_name).filter(Boolean));
@@ -300,17 +312,21 @@ export default function Players() {
               }}>{p}</div>
             );
           })}
-          <select
-            value={filterTeam}
-            onChange={(e) => setFilterTeam(e.target.value)}
-            style={{
-              padding: '6px 10px', fontSize: 11, fontWeight: 600,
-              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: 7, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer',
-            }}
-          >
-            {teamOptions.map(t => <option key={t} value={t}>{t === 'ALL' ? 'All Teams' : t}</option>)}
-          </select>
+          {!isCoach && (
+            <select
+              value={filterTeam}
+              onChange={(e) => setFilterTeam(e.target.value)}
+              style={{
+                padding: '6px 10px', fontSize: 11, fontWeight: 600,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: 7, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer',
+              }}
+            >
+              {teamOptions.map(t => (
+                <option key={t} value={t} style={DROPDOWN_OPTION_STYLE}>{t === 'ALL' ? 'All Teams' : t}</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
