@@ -8,6 +8,7 @@ import Matches from './pages/Matches';
 import SquadDepth from './pages/SquadDepth';
 import About from './pages/About';
 import Pipeline from './pages/Pipeline';
+import MyScoutingNotes from './pages/MyScoutingNotes';
 import Login from './pages/Login';
 
 // /login is a standalone page -- no sidebar/nav chrome. Everything else
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/depth" element={<AppShell><RequireAuth><SquadDepth /></RequireAuth></AppShell>} />
           <Route path="/about" element={<AppShell><RequireAuth><About /></RequireAuth></AppShell>} />
           <Route path="/pipeline" element={<AppShell><RequireAuth><Pipeline /></RequireAuth></AppShell>} />
+          <Route path="/my-notes" element={<AppShell><RequireAuth><MyScoutingNotes /></RequireAuth></AppShell>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

@@ -11,6 +11,7 @@ const NAV = [
   { path: '/players',  emoji: '👤', label: 'Players'     },
   { path: '/matches',  emoji: '⚽', label: 'Matches'     },
   { path: '/depth',    emoji: '📊', label: 'Squad Depth' },
+  { path: '/my-notes', emoji: '📝', label: 'My Notes'    },
   { path: '/pipeline', emoji: '🛠️', label: 'Pipeline'    },
   { path: '/about',    emoji: '📖', label: 'About'       },
 ];
@@ -27,7 +28,7 @@ const ROLE_LABELS = {
 const NAV_PATHS_BY_ROLE = {
   analyst: ['/', '/players', '/matches', '/depth', '/pipeline', '/about'],
   coach:   ['/', '/players', '/matches', '/depth'],
-  scout:   ['/players', '/matches', '/depth'],
+  scout:   ['/players', '/matches', '/depth', '/my-notes'],
 };
 
 function navForRole(role) {
