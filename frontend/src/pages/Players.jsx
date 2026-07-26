@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { getPlayerPerformance, getFatigueRisk, getSquadDepth, getTeamInfo } from '../services/api';
+import { getPlayerPerformance, getFatigueRisk, getTeamInfo } from '../services/api';
 import { POS_ABBREV, POS_COLORS } from '../constants';
 import Skeleton from '../components/Skeleton';
 import PlayerModal from '../components/PlayerModal';
@@ -10,6 +10,7 @@ const POS_MAP = { GK: 'Goalkeeper', DEF: 'Defender', MID: 'Midfielder', FWD: 'Fo
 const COLUMNS = [
   { key: 'name',                   label: 'Player',    w: 180, center: false },
   { key: 'pos',                    label: 'Pos',       w: 60,  center: true  },
+  { key: 'team_name',              label: 'Team',      w: 130, center: false },
   { key: 'matches_played',         label: 'MP',        w: 50,  center: true  },
   { key: 'total_minutes',          label: 'Mins',      w: 60,  center: true,  hideMobile: true },
   { key: 'total_goals',            label: 'Goals',     w: 60,  center: true  },
@@ -89,6 +90,10 @@ function TableRow({ player, acc, maxShots, maxPasses, onSelect }) {
         <PosBadge pos={player.pos} />
       </div>
 
+      <div style={{ width: 130, flexShrink: 0, fontSize: 11.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
+        {player.team_name}
+      </div>
+
       <div style={{ width: 50, flexShrink: 0, textAlign: 'center', ...NUM }}>{player.matches_played}</div>
 
       <div className="col-hide-mobile" style={{ width: 60, flexShrink: 0, textAlign: 'center', ...NUM }}>{player.total_minutes}</div>
@@ -147,19 +152,19 @@ function TableRow({ player, acc, maxShots, maxPasses, onSelect }) {
 export default function Players() {
   const [performance, setPerformance] = useState([]);
   const [fatigueRisk, setFatigueRisk] = useState([]);
-  const [depth, setDepth] = useState(null);
   const [teamInfo, setTeamInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
   const [filterPos, setFilterPos] = useState('ALL');
+  const [filterTeam, setFilterTeam] = useState('ALL');
   const [search, setSearch] = useState('');
   const [sortKey,   setSortKey]   = useState('total_goals');
   const [sortDir,   setSortDir]   = useState('desc');
   const [selectedPlayer, setSelectedPlayer] = useState(null);
 
   useEffect(() => {
-    Promise.all([getPlayerPerformance(), getFatigueRisk(), getSquadDepth(), getTeamInfo()])
-      .then(([perf, risk, d, t]) => { setPerformance(perf); setFatigueRisk(risk); setDepth(d); setTeamInfo(t); })
+    Promise.all([getPlayerPerformance(), getFatigueRisk(), getTeamInfo()])
+      .then(([perf, risk, t]) => { setPerformance(perf); setFatigueRisk(risk); setTeamInfo(t); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -168,34 +173,33 @@ export default function Players() {
 
   const atRiskIds = useMemo(() => new Set(fatigueRisk.map(p => p.player_id)), [fatigueRisk]);
 
-  // Real position per player, from /api/players/depth's buckets -- not the
-  // stale frontend-only PLAYER_POSITIONS map, which used v1's string ids
-  // ("player-013") and never matches real StatsBomb integer ids.
-  const positionByPlayerId = useMemo(() => {
-    const map = {};
-    if (!depth) return map;
-    for (const bucket of ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']) {
-      for (const p of depth[bucket] || []) map[p.id] = bucket;
-    }
-    return map;
-  }, [depth]);
-
+  // Position and team now come straight from /api/players/performance
+  // (position_bucket/team_name) instead of the Barcelona-scoped /depth
+  // endpoint -- that endpoint never carried opponents, so it couldn't
+  // resolve their position at all.
   const players = useMemo(() => performance.map(p => ({
     ...p,
-    pos:  POS_ABBREV[positionByPlayerId[p.player_id]] || '???',
+    pos:  POS_ABBREV[p.position_bucket] || '???',
     status: atRiskIds.has(p.player_id) ? 'AT RISK' : 'FIT',
-  })), [performance, atRiskIds, positionByPlayerId]);
+  })), [performance, atRiskIds]);
+
+  const teamOptions = useMemo(() => {
+    const names = new Set(players.map(p => p.team_name).filter(Boolean));
+    return ['ALL', ...Array.from(names).sort()];
+  }, [players]);
 
   const filtered = useMemo(() => {
     let result = filterPos === 'ALL'
       ? players
-      : players.filter(p => positionByPlayerId[p.player_id] === POS_MAP[filterPos]);
+      : players.filter(p => p.position_bucket === POS_MAP[filterPos]);
+
+    if (filterTeam !== 'ALL') result = result.filter(p => p.team_name === filterTeam);
 
     const query = search.trim().toLowerCase();
     if (query) result = result.filter(p => p.name?.toLowerCase().includes(query));
 
     return result;
-  }, [players, filterPos, search, positionByPlayerId]);
+  }, [players, filterPos, filterTeam, search]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -296,6 +300,17 @@ export default function Players() {
               }}>{p}</div>
             );
           })}
+          <select
+            value={filterTeam}
+            onChange={(e) => setFilterTeam(e.target.value)}
+            style={{
+              padding: '6px 10px', fontSize: 11, fontWeight: 600,
+              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 7, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer',
+            }}
+          >
+            {teamOptions.map(t => <option key={t} value={t}>{t === 'ALL' ? 'All Teams' : t}</option>)}
+          </select>
         </div>
       </div>
 
@@ -371,20 +386,20 @@ export default function Players() {
                         <div
                           key={col.key}
                           className={col.hideMobile ? 'col-hide-mobile' : undefined}
-                          onClick={() => col.key !== 'status' && col.key !== 'pos' && handleSort(col.key)}
+                          onClick={() => col.key !== 'status' && col.key !== 'pos' && col.key !== 'team_name' && handleSort(col.key)}
                           style={{
                             width: col.w, flexShrink: 0,
                             padding: '11px 4px',
                             fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
                             color: sortKey === col.key ? ACC : '#8B949E',
-                            cursor: col.key !== 'status' && col.key !== 'pos' ? 'pointer' : 'default',
+                            cursor: col.key !== 'status' && col.key !== 'pos' && col.key !== 'team_name' ? 'pointer' : 'default',
                             display: 'flex', alignItems: 'center',
                             justifyContent: col.center ? 'center' : 'flex-start',
                             userSelect: 'none', transition: 'color 0.15s',
                           }}
                         >
                           {col.label}
-                          {col.key !== 'status' && col.key !== 'pos' && (
+                          {col.key !== 'status' && col.key !== 'pos' && col.key !== 'team_name' && (
                             <SortIcon dir={sortKey === col.key ? sortDir : null} />
                           )}
                         </div>

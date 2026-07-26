@@ -235,7 +235,7 @@ export default function Dashboard() {
     : null;
 
   const topPerformers = [...performance]
-    .filter(p => (p.xg || 0) > 0)
+    .filter(p => p.team_name === teamInfo?.team_name && (p.xg || 0) > 0)
     .sort((a, b) => (b.xg || 0) - (a.xg || 0))
     .slice(0, 3);
 
