@@ -1,5 +1,6 @@
 import Modal, { ModalCloseButton } from './Modal';
 import Avatar from './Avatar';
+import ScoutingNotes from './ScoutingNotes';
 import { POS_COLORS } from '../constants';
 
 const POS_FULL = { GK: 'Goalkeeper', DEF: 'Defender', MID: 'Midfielder', FWD: 'Forward' };
@@ -64,6 +65,8 @@ export default function PlayerModal({ player, open, onClose }) {
           <StatTile label="Pressure Regains"    value={player.total_pressure_regains} color="var(--green)" />
         </div>
       </div>
+
+      <ScoutingNotes playerId={player.player_id} />
     </Modal>
   );
 }
