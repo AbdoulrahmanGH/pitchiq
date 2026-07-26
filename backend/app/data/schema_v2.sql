@@ -107,3 +107,19 @@ create table user_roles (
   user_id uuid primary key references auth.users(id),
   role text not null check (role in ('analyst','coach','scout'))
 );
+
+-- Results of the BigQuery window-function analytics queries (season
+-- rankings, rolling xG trend -- see app/data/bigquery_analytics_v2.py),
+-- cached here so the API never queries BigQuery on the request path. Each
+-- run appends a new row rather than updating in place; readers take the
+-- latest row per query_name. payload shape is query-specific and is not
+-- itself modeled in SQL -- it's whatever list of dicts that query produced,
+-- JSON-serialized.
+create table analytics_cache (
+  id bigserial primary key,
+  query_name text not null,
+  computed_at timestamptz not null default now(),
+  payload jsonb not null
+);
+
+create index idx_analytics_cache_lookup on analytics_cache (query_name, computed_at desc);
