@@ -114,6 +114,14 @@ create table user_roles (
   role text not null check (role in ('analyst','coach','scout'))
 );
 
+create table player_status (
+  player_id integer primary key references players(id),
+  status text not null check (status in ('available', 'doubtful', 'unavailable')),
+  note text,
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz not null default now()
+);
+
 -- Results of the BigQuery window-function analytics queries (season
 -- rankings, rolling xG trend -- see app/data/bigquery_analytics_v2.py),
 -- cached here so the API never queries BigQuery on the request path. Each
