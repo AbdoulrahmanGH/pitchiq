@@ -99,8 +99,8 @@ class FakeScoutingNotesTable:
         return self
 
     def eq(self, column, value):
-        assert column == "player_id"
-        self._result = [r for r in self._result if r["player_id"] == value]
+        assert column in ("player_id", "author_id")
+        self._result = [r for r in self._result if r[column] == value]
         return self
 
     def order(self, column, desc=False):
@@ -141,14 +141,42 @@ class FakePlayerStatusTable:
         return FakeResult(self._result if self._result is not None else [])
 
 
+class FakeSimpleSelectTable:
+    """Generic read-only fake for tables only ever queried as
+    select(...).in_(column, values).execute() -- used for the players/
+    player_match_stats/teams lookups that enrich scouting notes with a
+    player name and team. rows: the full table contents this fake serves
+    from; in_() filters down to matching values.
+    """
+    def __init__(self, rows=None):
+        self._rows = list(rows or [])
+        self._result = None
+
+    def select(self, *_args, **_kwargs):
+        self._result = list(self._rows)
+        return self
+
+    def in_(self, column, values):
+        values = set(values)
+        self._result = [r for r in self._result if r.get(column) in values]
+        return self
+
+    def execute(self):
+        return FakeResult(self._result if self._result is not None else [])
+
+
 class FakeClient:
     def __init__(self, user=None, raise_on_get_user=False, roles_by_user_id=None,
-                 analytics_cache_rows=None, scouting_notes=None, player_statuses=None):
+                 analytics_cache_rows=None, scouting_notes=None, player_statuses=None,
+                 players_rows=None, player_match_stats_rows=None, teams_rows=None):
         self.auth = FakeAuth(user=user, raise_on_get_user=raise_on_get_user)
         self._roles_by_user_id = roles_by_user_id or {}
         self._analytics_cache_rows = analytics_cache_rows or {}
         self._scouting_notes = scouting_notes
         self._player_statuses = player_statuses
+        self._players_rows = players_rows
+        self._player_match_stats_rows = player_match_stats_rows
+        self._teams_rows = teams_rows
 
     def table(self, name):
         if name == "user_roles":
@@ -159,4 +187,10 @@ class FakeClient:
             return FakeScoutingNotesTable(self._scouting_notes)
         if name == "player_status":
             return FakePlayerStatusTable(self._player_statuses)
+        if name == "players":
+            return FakeSimpleSelectTable(self._players_rows)
+        if name == "player_match_stats":
+            return FakeSimpleSelectTable(self._player_match_stats_rows)
+        if name == "teams":
+            return FakeSimpleSelectTable(self._teams_rows)
         raise AssertionError(f"FakeClient.table() called with unexpected table: {name}")
