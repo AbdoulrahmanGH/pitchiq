@@ -38,6 +38,20 @@ async function post(path) {
   return res.json();
 }
 
+async function postJSON(path, body) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
+  };
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const err = new Error(`${res.status} ${res.statusText}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
 export const getPlayerPerformance = () => get('/api/players/performance');
 export const getFatigueRisk        = () => get('/api/players/fatigue-risk');
 export const getSquadDepth         = () => get('/api/players/depth');
@@ -47,6 +61,13 @@ export const getTeamInfo           = () => get('/api/team/info');
 export const getMatchDetail        = (matchId) => get(`/api/matches/${matchId}/detail`);
 export const getPipelineStatus      = () => get('/api/pipeline/status');
 export const triggerPipelineRefresh = () => post('/api/pipeline/refresh');
+
+export const getScoutingNotes  = (playerId) => get(`/api/scouting/notes?player_id=${playerId}`);
+export const postScoutingNote  = (playerId, note, rating) =>
+  postJSON('/api/scouting/notes', { player_id: playerId, note, rating });
+export const getPlayerStatuses = () => get('/api/players/status');
+export const postPlayerStatus  = (playerId, status, note) =>
+  postJSON('/api/players/status', { player_id: playerId, status, note });
 
 // Kept as an explicit-token call (not the shared currentToken) -- Login.jsx
 // needs the just-issued token's whoami result before AuthProvider's own
