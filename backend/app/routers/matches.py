@@ -48,9 +48,32 @@ def build_matches_response(matches_rows, team_stats_rows, team_names_by_id, our_
     return result
 
 
-def build_readiness_response(at_risk_players):
-    score = max(0, 100 - (5 * len(at_risk_players)))
-    return {"readiness_score": score, "at_risk_players": at_risk_players}
+def build_readiness_response(at_risk_players, player_statuses=None):
+    """at_risk_players: from get_at_risk_players (fatigue rule only).
+    player_statuses: player_status rows ({"player_id", "status", ...}),
+    the coach's manually-set availability -- independent signal from fatigue.
+
+    A player marked unavailable is definitely not playing, so their fatigue
+    flag (if any) is dropped from the fatigue penalty to avoid double-
+    counting the same absence twice. Doubtful is not a confirmed absence,
+    so fatigue still applies on top of it.
+    """
+    player_statuses = player_statuses or []
+    unavailable = [s for s in player_statuses if s["status"] == "unavailable"]
+    doubtful = [s for s in player_statuses if s["status"] == "doubtful"]
+    unavailable_ids = {s["player_id"] for s in unavailable}
+
+    counted_at_risk = [p for p in at_risk_players if p["player_id"] not in unavailable_ids]
+    fatigue_penalty = 5 * len(counted_at_risk)
+    availability_penalty = 15 * len(unavailable) + 7 * len(doubtful)
+
+    score = max(0, 100 - fatigue_penalty - availability_penalty)
+    return {
+        "readiness_score": score,
+        "at_risk_players": at_risk_players,
+        "unavailable_players": unavailable,
+        "doubtful_players": doubtful,
+    }
 
 
 def _average(values):
@@ -225,7 +248,16 @@ def get_match_detail(match_id: int, _user: AuthenticatedUser = Depends(get_curre
 def get_team_readiness(_user: AuthenticatedUser = Depends(get_current_user)):
     supabase = get_db()
     at_risk = get_at_risk_players(supabase, BARCELONA_TEAM_ID)
-    return build_readiness_response(at_risk)
+
+    status_rows = supabase.table("player_status").select(
+        "player_id, status, note, updated_by, updated_at, players(name, nickname)"
+    ).execute().data
+    player_statuses = []
+    for r in status_rows:
+        joined = r.pop("players", None) or {}
+        player_statuses.append({**r, "name": joined.get("name"), "nickname": joined.get("nickname")})
+
+    return build_readiness_response(at_risk, player_statuses)
 
 
 @team_router.get("/info")

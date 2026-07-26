@@ -103,6 +103,63 @@ def test_readiness_score_floors_at_zero():
     assert result["readiness_score"] == 0
 
 
+def test_readiness_score_penalizes_unavailable_players():
+    result = build_readiness_response(
+        at_risk_players=[],
+        player_statuses=[{"player_id": 1, "status": "unavailable"}],
+    )
+
+    assert result["readiness_score"] == 85
+    assert result["unavailable_players"] == [{"player_id": 1, "status": "unavailable"}]
+    assert result["doubtful_players"] == []
+
+
+def test_readiness_score_penalizes_doubtful_players_less_than_unavailable():
+    result = build_readiness_response(
+        at_risk_players=[],
+        player_statuses=[{"player_id": 2, "status": "doubtful"}],
+    )
+
+    assert result["readiness_score"] == 93
+    assert result["doubtful_players"] == [{"player_id": 2, "status": "doubtful"}]
+
+
+def test_readiness_does_not_double_penalize_a_player_both_fatigued_and_unavailable():
+    # A player already marked unavailable by the coach is definitely not
+    # playing -- their fatigue-risk flag would be redundant information, so
+    # it must not also cost 5 points on top of the 15-point unavailable
+    # penalty.
+    result = build_readiness_response(
+        at_risk_players=[{"player_id": 1}],
+        player_statuses=[{"player_id": 1, "status": "unavailable"}],
+    )
+
+    assert result["readiness_score"] == 85  # 100 - 15, not 100 - 15 - 5
+
+
+def test_readiness_still_counts_fatigue_for_a_doubtful_player():
+    # Doubtful is not a confirmed absence -- fatigue risk still applies on
+    # top of it.
+    result = build_readiness_response(
+        at_risk_players=[{"player_id": 2}],
+        player_statuses=[{"player_id": 2, "status": "doubtful"}],
+    )
+
+    assert result["readiness_score"] == 88  # 100 - 5 (fatigue) - 7 (doubtful)
+
+
+def test_readiness_with_no_player_statuses_matches_fatigue_only_behavior():
+    # Backward-compatible default -- omitting player_statuses entirely must
+    # behave exactly like the old fatigue-only formula.
+    at_risk = [{"player_id": 1}, {"player_id": 2}]
+
+    result = build_readiness_response(at_risk)
+
+    assert result["readiness_score"] == 90
+    assert result["unavailable_players"] == []
+    assert result["doubtful_players"] == []
+
+
 # --------------------------- bug: hardcoded team/league name ---------------------------
 
 def test_team_info_returns_real_team_competition_and_season():
