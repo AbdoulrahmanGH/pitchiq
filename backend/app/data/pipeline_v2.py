@@ -34,10 +34,17 @@ from datetime import datetime, timezone
 import ijson
 import pandas as pd
 import requests
-from google.cloud import storage
+from google.cloud import bigquery, storage
 
+from app.data.bigquery_analytics_v2 import (
+    DATASET as BQ_DATASET,
+    MIRROR_TABLES as BQ_MIRROR_TABLES,
+    PROJECT as BQ_PROJECT,
+    mirror_to_bigquery,
+    run_analytics_and_cache,
+)
 from app.data.load_v2 import load as load_to_supabase
-from app.data.quality_checks import assert_quality
+from app.data.quality_checks import assert_bigquery_mirror_quality, assert_quality
 from app.db import get_db
 
 BASE_URL = "https://raw.githubusercontent.com/hudl/open-data/master/data"
@@ -496,6 +503,26 @@ def run(write_csv=True, write_db=True):
 
         print("\nRunning data quality checks...")
         assert_quality(db_client, BARCELONA_TEAM_ID)
+
+        # Everything below here is the BigQuery analytics stage: a mirror
+        # of matches/player_match_stats/team_match_stats, verified against
+        # Postgres, then the two window-function queries cached for the
+        # API. It only runs once the Postgres load and quality checks
+        # above have already succeeded -- assert_quality raising propagates
+        # straight out of run(), so this stage never executes against a
+        # load that didn't pass.
+        bq_client = bigquery.Client(project=BQ_PROJECT)
+
+        print("\nMirroring to BigQuery...")
+        mirror_to_bigquery(supabase_client=db_client, bq_client=bq_client)
+
+        print("\nVerifying BigQuery mirror against Postgres...")
+        assert_bigquery_mirror_quality(
+            db_client, bq_client, BQ_PROJECT, BQ_DATASET, BQ_MIRROR_TABLES
+        )
+
+        print("\nRunning BigQuery analytics queries and caching results...")
+        run_analytics_and_cache(bq_client=bq_client, supabase_client=db_client)
 
     return tables
 

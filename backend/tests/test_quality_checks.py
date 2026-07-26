@@ -11,7 +11,9 @@ import pytest
 
 from app.data.quality_checks import (
     QualityCheckFailure,
+    assert_bigquery_mirror_quality,
     assert_quality,
+    find_bigquery_mirror_count_mismatches,
     find_matches_missing_scores,
     find_null_primary_positions,
     find_null_team_names,
@@ -22,8 +24,9 @@ TEAM_ID = 217
 
 
 class FakeResult:
-    def __init__(self, data):
+    def __init__(self, data, count=None):
         self.data = data
+        self.count = count if count is not None else len(data)
 
 
 class FakeTable:
@@ -44,6 +47,9 @@ class FakeTable:
         self._filtered = [r for r in self._filtered if r.get(column) in values]
         return self
 
+    def limit(self, _n):
+        return self
+
     def execute(self):
         return FakeResult(self._filtered)
 
@@ -56,13 +62,36 @@ class FakeClient:
         return FakeTable(self._tables[name])
 
 
-def make_client(pms=None, players=None, teams=None, matches=None):
+def make_client(pms=None, players=None, teams=None, matches=None, team_match_stats=None):
     return FakeClient({
         "player_match_stats": pms or [],
         "players": players or [],
         "teams": teams or [],
         "matches": matches or [],
+        "team_match_stats": team_match_stats or [],
     })
+
+
+class FakeBigQueryResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def result(self):
+        return self._rows
+
+
+class FakeBigQueryClient:
+    """counts_by_table: {table_name: row_count}. query() matches the table
+    name embedded in the SQL string -- good enough for these pure-logic
+    tests without parsing real SQL."""
+    def __init__(self, counts_by_table):
+        self._counts_by_table = counts_by_table
+
+    def query(self, sql, job_config=None):
+        for table_name, count in self._counts_by_table.items():
+            if f".{table_name}`" in sql:
+                return FakeBigQueryResult([{"n": count}])
+        raise AssertionError(f"unexpected BigQuery query: {sql}")
 
 
 # --------------------------- null primary_position ---------------------------
@@ -173,3 +202,59 @@ def test_assert_quality_does_not_raise_when_clean():
     )
 
     assert_quality(client, TEAM_ID)  # must not raise
+
+
+# --------------------------- BigQuery mirror quality ---------------------------
+
+MIRROR_TABLES = ("matches", "player_match_stats", "team_match_stats")
+
+
+def test_bigquery_mirror_counts_finds_no_mismatch_when_equal():
+    supabase = make_client(
+        matches=[{"id": 1}, {"id": 2}],
+        pms=[{"id": 1}, {"id": 2}, {"id": 3}],
+        team_match_stats=[{"id": 1}, {"id": 2}],
+    )
+    bq = FakeBigQueryClient({"matches": 2, "player_match_stats": 3, "team_match_stats": 2})
+
+    result = find_bigquery_mirror_count_mismatches(
+        supabase, bq, "proj", "ds", MIRROR_TABLES
+    )
+
+    assert result == {}
+
+
+def test_bigquery_mirror_counts_flags_a_short_mirror():
+    # A WRITE_TRUNCATE load that landed fewer rows than Postgres has --
+    # e.g. a truncated/partial BigQuery load job.
+    supabase = make_client(
+        matches=[{"id": 1}, {"id": 2}],
+        pms=[{"id": 1}, {"id": 2}, {"id": 3}],
+        team_match_stats=[{"id": 1}, {"id": 2}],
+    )
+    bq = FakeBigQueryClient({"matches": 2, "player_match_stats": 2, "team_match_stats": 2})
+
+    result = find_bigquery_mirror_count_mismatches(
+        supabase, bq, "proj", "ds", MIRROR_TABLES
+    )
+
+    assert result == {"player_match_stats": {"postgres": 3, "bigquery": 2}}
+
+
+def test_assert_bigquery_mirror_quality_raises_on_mismatch():
+    supabase = make_client(matches=[{"id": 1}])
+    bq = FakeBigQueryClient({"matches": 0, "player_match_stats": 0, "team_match_stats": 0})
+
+    with pytest.raises(QualityCheckFailure):
+        assert_bigquery_mirror_quality(supabase, bq, "proj", "ds", MIRROR_TABLES)
+
+
+def test_assert_bigquery_mirror_quality_does_not_raise_when_clean():
+    supabase = make_client(
+        matches=[{"id": 1}],
+        pms=[{"id": 1}],
+        team_match_stats=[{"id": 1}],
+    )
+    bq = FakeBigQueryClient({"matches": 1, "player_match_stats": 1, "team_match_stats": 1})
+
+    assert_bigquery_mirror_quality(supabase, bq, "proj", "ds", MIRROR_TABLES)  # must not raise

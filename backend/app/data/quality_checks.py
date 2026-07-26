@@ -79,3 +79,51 @@ def assert_quality(client, team_id):
 
     print("Data quality checks passed: no null primary_position on our roster, "
           "no null team names, no matches missing scores.")
+
+
+# --------------------------- BigQuery mirror quality ---------------------------
+
+def find_bigquery_mirror_count_mismatches(supabase_client, bq_client, project, dataset, tables):
+    """tables: table names mirrored into BigQuery (see
+    app/data/bigquery_analytics_v2.py). Postgres is the source of truth --
+    any mismatch means the WRITE_TRUNCATE mirror load didn't fully land,
+    the same class of stale-write bug this module already guards against.
+    """
+    mismatches = {}
+    for table_name in tables:
+        pg_count = supabase_client.table(table_name).select(
+            "*", count="exact"
+        ).limit(1).execute().count
+
+        bq_rows = list(bq_client.query(
+            f"SELECT COUNT(*) AS n FROM `{project}.{dataset}.{table_name}`"
+        ).result())
+        bq_count = bq_rows[0]["n"]
+
+        if pg_count != bq_count:
+            mismatches[table_name] = {"postgres": pg_count, "bigquery": bq_count}
+    return mismatches
+
+
+def assert_bigquery_mirror_quality(supabase_client, bq_client, project, dataset, tables):
+    """Logs and raises QualityCheckFailure if the BigQuery mirror's row
+    counts don't exactly match Postgres for every mirrored table. Call
+    right after the mirror step; let this propagate so the job exits
+    non-zero rather than caching analytics off a partial mirror.
+    """
+    mismatches = find_bigquery_mirror_count_mismatches(
+        supabase_client, bq_client, project, dataset, tables
+    )
+
+    if mismatches:
+        print("BIGQUERY MIRROR QUALITY CHECK FAILED:")
+        for table, counts in mismatches.items():
+            print(f"  [{table}] postgres={counts['postgres']} bigquery={counts['bigquery']}")
+        summary = "; ".join(
+            f"{t} (postgres {c['postgres']} != bigquery {c['bigquery']})"
+            for t, c in mismatches.items()
+        )
+        raise QualityCheckFailure(f"BigQuery mirror quality check failed: {summary}")
+
+    print(f"BigQuery mirror quality check passed: row counts match Postgres for "
+          f"{', '.join(tables)}.")
