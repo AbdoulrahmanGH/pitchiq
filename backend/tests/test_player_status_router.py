@@ -84,12 +84,24 @@ def test_post_player_status_rejects_invalid_status_value():
     assert response.status_code == 422
 
 
-def test_get_player_statuses_returns_all_rows_for_any_authenticated_role():
-    existing = [{"player_id": 5503, "status": "doubtful", "note": None,
+def test_get_player_statuses_attaches_names_and_defaults_missing_players_to_available():
+    # A player nobody has ever flagged still needs to show up (as
+    # "available", the implicit default) with their real name attached --
+    # not silently omitted, and never just a bare player_id.
+    players_rows = [
+        {"id": 5503, "name": "Lionel Messi", "nickname": "Messi", "primary_position": "Right Wing"},
+        {"id": 9999, "name": "Backup Keeper", "nickname": None, "primary_position": "Goalkeeper"},
+    ]
+    player_match_stats_rows = [
+        {"player_id": 5503, "team_id": 217},
+        {"player_id": 9999, "team_id": 217},
+    ]
+    existing = [{"player_id": 5503, "status": "doubtful", "note": "Tight hamstring",
                  "updated_by": "coach-1", "updated_at": "2026-07-26T00:00:00Z"}]
     fake_user = FakeUser(id="scout-1", email="scout@example.com")
     app.dependency_overrides[get_db] = lambda: FakeClient(
-        user=fake_user, roles_by_user_id={"scout-1": "scout"}, player_statuses=existing
+        user=fake_user, roles_by_user_id={"scout-1": "scout"}, player_statuses=existing,
+        players_rows=players_rows, player_match_stats_rows=player_match_stats_rows,
     )
     try:
         response = client.get("/api/players/status", headers={"Authorization": "Bearer good-token"})
@@ -97,7 +109,15 @@ def test_get_player_statuses_returns_all_rows_for_any_authenticated_role():
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert response.json() == existing
+    body = response.json()
+    assert len(body) == 2
+    by_id = {row["player_id"]: row for row in body}
+    assert by_id[5503]["status"] == "doubtful"
+    assert by_id[5503]["name"] == "Lionel Messi"
+    assert by_id[9999]["status"] == "available"
+    assert by_id[9999]["name"] == "Backup Keeper"
+    assert by_id[9999]["note"] is None
+    assert by_id[9999]["updated_by"] is None
 
 
 def test_get_player_statuses_requires_auth():

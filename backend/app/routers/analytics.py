@@ -36,20 +36,42 @@ def _latest_cache_rows(client, query_name):
     ).order("computed_at", desc=True).limit(1).execute().data
 
 
+def _player_names_by_id(client, player_ids):
+    if not player_ids:
+        return {}
+    rows = client.table("players").select("id, name, nickname").in_(
+        "id", list(set(player_ids))
+    ).execute().data
+    return {r["id"]: {"name": r["name"], "nickname": r["nickname"]} for r in rows}
+
+
 def fetch_rankings_data(client):
     rows = _latest_cache_rows(client, SEASON_RANKINGS)
     response = build_analytics_response(rows, SEASON_RANKINGS)
-    # goals_minus_xg: positive means outscoring xG (finishing above expectation),
-    # negative means underperforming it -- computed here from season_goals/
-    # season_xg already in the cached payload, not a new BigQuery query.
+    # The cached payload only ever carries player_id -- every row needs the
+    # real name joined in here, once, so no caller (Groq prompt or response)
+    # ever has to show a bare player_id.
+    players_by_id = _player_names_by_id(client, [row["player_id"] for row in response["data"]])
     for row in response["data"]:
+        # goals_minus_xg: positive means outscoring xG (finishing above expectation),
+        # negative means underperforming it -- computed here from season_goals/
+        # season_xg already in the cached payload, not a new BigQuery query.
         row["goals_minus_xg"] = round((row["season_goals"] or 0) - (row["season_xg"] or 0), 2)
+        meta = players_by_id.get(row["player_id"], {})
+        row["name"] = meta.get("name")
+        row["nickname"] = meta.get("nickname")
     return response
 
 
 def fetch_trends_data(client):
     rows = _latest_cache_rows(client, ROLLING_XG_TREND)
-    return build_analytics_response(rows, ROLLING_XG_TREND)
+    response = build_analytics_response(rows, ROLLING_XG_TREND)
+    players_by_id = _player_names_by_id(client, [row["player_id"] for row in response["data"]])
+    for row in response["data"]:
+        meta = players_by_id.get(row["player_id"], {})
+        row["name"] = meta.get("name")
+        row["nickname"] = meta.get("nickname")
+    return response
 
 
 @analytics_router.get("/rankings")

@@ -192,9 +192,33 @@ def fetch_depth_data(client):
 
 
 def fetch_player_statuses_data(client):
-    return client.table("player_status").select(
+    """Every squad player, not just the ones with an explicit player_status
+    row -- a player nobody has ever flagged is available by default (the
+    same assumption the readiness scoring already makes), and needs their
+    real name joined in so "who's available" doesn't have to be answered
+    with bare player_ids.
+    """
+    pms_rows = client.table("player_match_stats").select("player_id").eq(
+        "team_id", BARCELONA_TEAM_ID
+    ).execute().data
+    squad_ids = sorted({r["player_id"] for r in pms_rows})
+
+    players_by_id = _players_by_id(client, squad_ids)
+
+    status_rows = client.table("player_status").select(
         "player_id, status, note, updated_by, updated_at"
     ).execute().data
+    status_by_player_id = {r["player_id"]: r for r in status_rows}
+
+    result = []
+    for pid in squad_ids:
+        meta = players_by_id.get(pid, {})
+        row = status_by_player_id.get(pid) or {
+            "player_id": pid, "status": "available", "note": None,
+            "updated_by": None, "updated_at": None,
+        }
+        result.append({**row, "name": meta.get("name"), "nickname": meta.get("nickname")})
+    return result
 
 
 @router.get("/performance")

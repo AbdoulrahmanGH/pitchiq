@@ -75,6 +75,7 @@ def test_rankings_returns_latest_cached_payload():
                               "season_xg": 27.65, "xg_rank": 1}]},
             ],
         },
+        players_rows=[{"id": 5246, "name": "Luis Suarez", "nickname": "Suarez"}],
     )
     _override_get_db(fake)
 
@@ -88,7 +89,8 @@ def test_rankings_returns_latest_cached_payload():
     body = response.json()
     assert body["query_name"] == SEASON_RANKINGS
     assert body["data"] == [{"player_id": 5246, "season_goals": 40, "goals_rank": 1,
-                             "season_xg": 27.65, "xg_rank": 1, "goals_minus_xg": 12.35}]
+                             "season_xg": 27.65, "xg_rank": 1, "goals_minus_xg": 12.35,
+                             "name": "Luis Suarez", "nickname": "Suarez"}]
 
 
 def test_fetch_rankings_data_computes_goals_minus_xg_per_player():
@@ -104,13 +106,41 @@ def test_fetch_rankings_data_computes_goals_minus_xg_per_player():
                  ]},
             ],
         },
+        players_rows=[
+            {"id": 1, "name": "Lionel Messi", "nickname": "Messi"},
+            {"id": 2, "name": "Luis Suarez", "nickname": "Suarez"},
+        ],
     )
 
     result = fetch_rankings_data(fake)
 
     by_id = {row["player_id"]: row for row in result["data"]}
     assert by_id[1]["goals_minus_xg"] == 12.0  # outperforming xG
+    assert by_id[1]["name"] == "Lionel Messi"
     assert by_id[2]["goals_minus_xg"] == -5.0  # underperforming xG
+    assert by_id[2]["name"] == "Luis Suarez"
+
+
+def test_rankings_data_never_omits_name_even_when_player_lookup_misses():
+    # A row whose player_id has no matching players row must still come
+    # back with an explicit name key (None) rather than silently dropping
+    # it -- callers should never have to guess whether "name" exists.
+    fake = FakeClient(
+        user=FAKE_USER,
+        roles_by_user_id={"user-1": "analyst"},
+        analytics_cache_rows={
+            SEASON_RANKINGS: [
+                {"computed_at": "2026-07-26T12:00:00Z",
+                 "payload": [{"player_id": 999, "season_goals": 5, "season_xg": 4.0,
+                              "goals_rank": 10, "xg_rank": 10}]},
+            ],
+        },
+    )
+
+    result = fetch_rankings_data(fake)
+
+    assert result["data"][0]["name"] is None
+    assert result["data"][0]["nickname"] is None
 
 
 def test_trends_returns_latest_cached_payload():
@@ -124,6 +154,7 @@ def test_trends_returns_latest_cached_payload():
                               "xg": 0.03, "rolling_3match_avg_xg": 0.03}]},
             ],
         },
+        players_rows=[{"id": 5246, "name": "Luis Suarez", "nickname": "Suarez"}],
     )
     _override_get_db(fake)
 
@@ -138,6 +169,7 @@ def test_trends_returns_latest_cached_payload():
     assert body["query_name"] == ROLLING_XG_TREND
     assert len(body["data"]) == 1
     assert body["data"][0]["player_id"] == 5246
+    assert body["data"][0]["name"] == "Luis Suarez"
 
 
 def test_rankings_returns_empty_when_cache_not_yet_populated():

@@ -513,3 +513,49 @@ def test_outperforming_xg_question_sorts_rankings_by_goals_minus_xg_desc():
     assert result == "Player 2 is outperforming their xG the most."
     prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
     assert prompt.index("'goals_minus_xg': 12.0") < prompt.index("'goals_minus_xg': -5.0")
+
+
+def test_outperforming_xg_question_surfaces_player_names_not_bare_ids():
+    # Real failure: rankings rows only ever carried player_id, so a
+    # follow-up question referencing "Suarez" by name had nothing to match
+    # against, and the answer itself could only cite bare IDs.
+    rankings_data = {
+        "query_name": "season_rankings", "computed_at": "2026-07-26T00:00:00Z",
+        "data": [
+            {"player_id": 1, "season_goals": 20, "season_xg": 25.0, "goals_minus_xg": -5.0,
+             "name": "Sergio Busquets", "nickname": None},
+            {"player_id": 2, "season_goals": 30, "season_xg": 18.0, "goals_minus_xg": 12.0,
+             "name": "Luis Suarez", "nickname": "Suarez"},
+        ],
+    }
+    mock_client = _mock_groq_two_calls("season_rankings", "Luis Suarez is outperforming their xG the most.")
+
+    with patch("app.services.ai_service.fetch_rankings_data", return_value=rankings_data), \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = answer_question("Who's outperforming their xG?", MagicMock(), ANALYST_USER)
+
+    assert result == "Luis Suarez is outperforming their xG the most."
+    prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "Luis Suarez" in prompt
+
+
+def test_availability_question_surfaces_full_squad_with_default_status_and_names():
+    # Real failure: players with no player_status row were silently
+    # omitted (so "who's available" couldn't be answered for most of the
+    # squad), and the rows that did exist only carried a bare player_id.
+    statuses = [
+        {"player_id": 1, "status": "doubtful", "note": "Tight hamstring", "updated_by": "coach-1",
+         "updated_at": "2026-07-26T00:00:00Z", "name": "Lionel Messi", "nickname": "Messi"},
+        {"player_id": 2, "status": "available", "note": None, "updated_by": None,
+         "updated_at": None, "name": "Luis Suarez", "nickname": "Suarez"},
+    ]
+    mock_client = _mock_groq_two_calls("availability", "Messi is doubtful; Suarez is available.")
+    coach_user = AuthenticatedUser(id="coach-1", email="coach@example.com", role="coach")
+
+    with patch("app.services.ai_service.fetch_player_statuses_data", return_value=statuses), \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = answer_question("Who's available?", MagicMock(), coach_user)
+
+    assert result == "Messi is doubtful; Suarez is available."
+    prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "Lionel Messi" in prompt and "Luis Suarez" in prompt

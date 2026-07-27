@@ -161,6 +161,10 @@ class FakeSimpleSelectTable:
         self._result = [r for r in self._result if r.get(column) in values]
         return self
 
+    def eq(self, column, value):
+        self._result = [r for r in self._result if r.get(column) == value]
+        return self
+
     def execute(self):
         return FakeResult(self._result if self._result is not None else [])
 
