@@ -9,6 +9,7 @@ mechanism-design.md for the full design.
 
 import logging
 import re
+import unicodedata
 from typing import Optional
 
 from openai import OpenAI
@@ -128,15 +129,24 @@ PLAYER_NOT_FOUND_MESSAGE = (
 )
 
 
+def _fold_accents(text: str) -> str:
+    # Casual questions commonly drop accents ("Suarez" for "Suárez") --
+    # comparisons happen on the accent-stripped ASCII form on both sides.
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+
+
 def resolve_player_names(question: str, players_rows: list) -> list:
     candidate_tokens = {
-        re.sub(r"'s$", "", word.lower())
-        for word in re.findall(r"[A-Za-z']+", question)
+        _fold_accents(re.sub(r"'s$", "", word.lower()))
+        for word in re.findall(r"[A-Za-zÀ-ÿ']+", question)
         if word[0].isupper() and len(word) >= 3
     }
     matches = {}
     for player in players_rows:
-        name_words = set(re.findall(r"[a-z']+", player["name"].lower()))
+        name_words = {
+            _fold_accents(word)
+            for word in re.findall(r"[a-zà-ÿ']+", player["name"].lower())
+        }
         if candidate_tokens & name_words:
             matches[player["id"]] = player
     return list(matches.values())

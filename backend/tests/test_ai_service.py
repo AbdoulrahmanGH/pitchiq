@@ -98,6 +98,17 @@ def test_resolve_player_names_returns_all_matches_when_ambiguous():
     assert {p["id"] for p in result} == {3, 4}
 
 
+def test_resolve_player_names_matches_accented_name_typed_without_accent():
+    # Real regression found via live verification: a coach typing "Suarez"
+    # (plain ASCII, the common casual spelling) must still resolve against
+    # the database's real accented name "Suárez".
+    players = [{"id": 5, "name": "Luis Alberto Suárez Díaz"}]
+
+    result = resolve_player_names("Compare Messi and Suarez this season", players + SAMPLE_PLAYERS)
+
+    assert {p["id"] for p in result} == {1, 5}
+
+
 def test_resolve_player_names_finds_two_distinct_matches_for_comparison():
     result = resolve_player_names("Compare Messi and Busquets this season", SAMPLE_PLAYERS)
 
