@@ -9,6 +9,7 @@ import SquadDepth from './pages/SquadDepth';
 import About from './pages/About';
 import Pipeline from './pages/Pipeline';
 import MyScoutingNotes from './pages/MyScoutingNotes';
+import Assistant from './pages/Assistant';
 import Login from './pages/Login';
 
 // /login is a standalone page -- no sidebar/nav chrome. Everything else
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/about" element={<AppShell><RequireAuth><About /></RequireAuth></AppShell>} />
           <Route path="/pipeline" element={<AppShell><RequireAuth><Pipeline /></RequireAuth></AppShell>} />
           <Route path="/my-notes" element={<AppShell><RequireAuth><MyScoutingNotes /></RequireAuth></AppShell>} />
+          <Route path="/assistant" element={<AppShell><RequireAuth><Assistant /></RequireAuth></AppShell>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

@@ -7,13 +7,14 @@ const COLLAPSED_W = 68;
 const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
 const NAV = [
-  { path: '/',         emoji: '🏠', label: 'Dashboard'   },
-  { path: '/players',  emoji: '👤', label: 'Players'     },
-  { path: '/matches',  emoji: '⚽', label: 'Matches'     },
-  { path: '/depth',    emoji: '📊', label: 'Squad Depth' },
-  { path: '/my-notes', emoji: '📝', label: 'My Notes'    },
-  { path: '/pipeline', emoji: '🛠️', label: 'Pipeline'    },
-  { path: '/about',    emoji: '📖', label: 'About'       },
+  { path: '/',          emoji: '🏠', label: 'Dashboard'   },
+  { path: '/players',   emoji: '👤', label: 'Players'     },
+  { path: '/matches',   emoji: '⚽', label: 'Matches'     },
+  { path: '/depth',     emoji: '📊', label: 'Squad Depth' },
+  { path: '/my-notes',  emoji: '📝', label: 'My Notes'    },
+  { path: '/assistant', emoji: '💬', label: 'Assistant'   },
+  { path: '/pipeline',  emoji: '🛠️', label: 'Pipeline'    },
+  { path: '/about',     emoji: '📖', label: 'About'       },
 ];
 
 const ROLE_LABELS = {
@@ -26,9 +27,9 @@ const ROLE_LABELS = {
 // since this step is only about which links show, not blocking direct
 // navigation to a route.
 const NAV_PATHS_BY_ROLE = {
-  analyst: ['/', '/players', '/matches', '/depth', '/pipeline', '/about'],
-  coach:   ['/', '/players', '/matches', '/depth'],
-  scout:   ['/players', '/matches', '/depth', '/my-notes'],
+  analyst: ['/', '/players', '/matches', '/depth', '/assistant', '/pipeline', '/about'],
+  coach:   ['/', '/players', '/matches', '/depth', '/assistant'],
+  scout:   ['/players', '/matches', '/depth', '/my-notes', '/assistant'],
 };
 
 function navForRole(role) {

@@ -71,6 +71,7 @@ export const postScoutingNote  = (playerId, note, rating) =>
 export const getPlayerStatuses = () => get('/api/players/status');
 export const postPlayerStatus  = (playerId, status, note) =>
   postJSON('/api/players/status', { player_id: playerId, status, note });
+export const askAssistant = (question) => postJSON('/api/ai/ask', { question });
 
 // Kept as an explicit-token call (not the shared currentToken) -- Login.jsx
 // needs the just-issued token's whoami result before AuthProvider's own
