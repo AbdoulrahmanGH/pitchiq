@@ -222,18 +222,18 @@ def fetch_player_statuses_data(client):
 
 
 @router.get("/performance")
-def get_player_performance(_user: AuthenticatedUser = Depends(get_current_user)):
-    return fetch_performance_data(get_db())
+def get_player_performance(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+    return fetch_performance_data(client)
 
 
 @router.get("/fatigue-risk")
-def get_fatigue_risk(_user: AuthenticatedUser = Depends(get_current_user)):
-    return fetch_fatigue_data(get_db())
+def get_fatigue_risk(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+    return fetch_fatigue_data(client)
 
 
 @router.get("/depth")
-def get_squad_depth(_user: AuthenticatedUser = Depends(get_current_user)):
-    return fetch_depth_data(get_db())
+def get_squad_depth(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+    return fetch_depth_data(client)
 
 
 class PlayerStatusUpdate(BaseModel):

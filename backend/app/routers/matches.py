@@ -204,14 +204,12 @@ def fetch_matches_summary_data(client):
 
 
 @matches_router.get("/summary")
-def get_matches_summary(_user: AuthenticatedUser = Depends(get_current_user)):
-    return fetch_matches_summary_data(get_db())
+def get_matches_summary(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+    return fetch_matches_summary_data(client)
 
 
 @matches_router.get("/{match_id}/detail")
-def get_match_detail(match_id: int, _user: AuthenticatedUser = Depends(get_current_user)):
-    supabase = get_db()
-
+def get_match_detail(match_id: int, _user: AuthenticatedUser = Depends(get_current_user), supabase=Depends(get_db)):
     match_rows = supabase.table("matches").select(
         "id, date, home_team_id, away_team_id, home_score, away_score, stadium"
     ).eq("id", match_id).execute().data
@@ -266,8 +264,8 @@ def fetch_readiness_data(client):
 
 
 @team_router.get("/readiness")
-def get_team_readiness(_user: AuthenticatedUser = Depends(get_current_user)):
-    return fetch_readiness_data(get_db())
+def get_team_readiness(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+    return fetch_readiness_data(client)
 
 
 def fetch_team_info_data(client):
