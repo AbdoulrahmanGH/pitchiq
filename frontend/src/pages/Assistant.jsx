@@ -17,12 +17,18 @@ export default function Assistant() {
     const question = input.trim();
     if (!question || loading) return;
 
+    // Messages always alternate user/assistant, so the last message (if
+    // any) before this new one is the previous assistant reply, and the
+    // one before that is the question it answered.
+    const previousAnswer = messages.length > 0 ? messages[messages.length - 1].content : undefined;
+    const previousQuestion = messages.length > 1 ? messages[messages.length - 2].content : undefined;
+
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: question }]);
     setLoading(true);
 
     try {
-      const data = await askAssistant(question);
+      const data = await askAssistant(question, previousQuestion, previousAnswer);
       setMessages(prev => [...prev, { role: 'assistant', content: data.answer }]);
     } catch {
       setMessages(prev => [...prev, {

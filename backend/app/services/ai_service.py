@@ -1,15 +1,19 @@
 """Routes a natural-language question to a supported data category via an
 LLM classifier (falling back to keyword matching if that call fails),
-fetches that category's real data in-process, and asks Groq to summarize
-only that data. Groq is the only provider -- no fallback chain -- but a
-failed or slow call still degrades to a friendly message instead of a raw
-error or a hung request. See docs/superpowers/specs/2026-07-27-ai-assistant-
-mechanism-design.md for the full design.
+resolves any player names mentioned via a second LLM call (falling back to
+substring matching if that call fails), fetches that category's real data
+in-process, and asks Groq to summarize only that data. Groq is the only
+provider -- no fallback chain -- but a failed or slow call still degrades
+to a friendly message instead of a raw error or a hung request. See
+docs/superpowers/specs/2026-07-27-ai-assistant-mechanism-design.md for the
+full design.
 """
 
+import json
 import logging
 import re
 import unicodedata
+from dataclasses import dataclass, field
 from typing import Optional
 
 from openai import OpenAI
@@ -73,15 +77,44 @@ CATEGORY_KEYWORDS = {
     ],
 }
 
-OUT_OF_SCOPE_MESSAGE = (
-    "I can only help with squad readiness questions right now. Try asking "
-    "about player availability, fitness, or fatigue risk."
-)
+# category -> short human-readable phrase, used to build a role-specific
+# out-of-scope message from that role's actual ROLE_ALLOWED_CATEGORIES
+# instead of one static sentence for every role.
+CATEGORY_DESCRIPTIONS = {
+    "team_readiness": "squad readiness",
+    "team_season_stats": "team season stats like PPDA and field tilt",
+    "player_fatigue": "fatigue risk",
+    "squad_depth": "squad depth",
+    "availability": "player availability",
+    "player_performance": "player performance",
+    "player_comparison": "player comparisons",
+    "season_rankings": "season rankings",
+    "player_trend": "player form trends",
+    "match_summary": "match results",
+    "scouting_notes": "scouting notes",
+}
+
 INJECTION_REFUSAL_MESSAGE = (
     "I'm focused on squad readiness questions and can't change how I "
     "operate. What would you like to know about the squad?"
 )
 FALLBACK_MESSAGE = "The assistant is temporarily unavailable. Please try again shortly."
+
+
+def out_of_scope_message(role: str) -> str:
+    topics = [CATEGORY_DESCRIPTIONS[c] for c in CATEGORY_KEYWORDS if c in ROLE_ALLOWED_CATEGORIES.get(role, set())]
+    if not topics:
+        topics = ["squad data"]
+
+    if len(topics) == 1:
+        topic_str = f"{topics[0]}"
+    elif len(topics) == 2:
+        topic_str = f"{topics[0]} and {topics[1]}"
+    else:
+        topic_str = ", ".join(topics[:-1]) + f", and {topics[-1]}"
+
+    return f"I can help with {topic_str} questions. What would you like to know?"
+
 
 SYSTEM_PROMPT = """You are PitchIQ's football operations assistant, an internal \
 tool for coaching, performance, and recruitment staff.
@@ -135,13 +168,33 @@ PLAYER_NOT_FOUND_MESSAGE = (
 )
 
 
+def get_groq_client() -> OpenAI:
+    return OpenAI(api_key=GROQ_API_KEY, base_url=GROQ_BASE_URL, timeout=GROQ_TIMEOUT_SECONDS)
+
+
+def build_context(previous_question: Optional[str], previous_answer: Optional[str]) -> Optional[str]:
+    """Short-term follow-up memory: just the immediately preceding turn, not
+    a full conversation history. Enough for "did you mean X?" / "yes" to
+    resolve, without the assistant needing any server-side session state --
+    the caller (the frontend) just echoes the last exchange back.
+    """
+    if not previous_question and not previous_answer:
+        return None
+    return f"Recent conversation:\nUser: {previous_question}\nAssistant: {previous_answer}\n"
+
+
 def _fold_accents(text: str) -> str:
     # Casual questions commonly drop accents ("Suarez" for "Suárez") --
     # comparisons happen on the accent-stripped ASCII form on both sides.
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 
-def resolve_player_names(question: str, players_rows: list) -> list:
+def _resolve_player_names_by_substring(question: str, players_rows: list) -> list:
+    """Fallback used only when the LLM resolver call fails -- deliberately
+    dumber than resolve_player_names (no typo tolerance, no clarification),
+    matching this module's "a failed call still degrades gracefully, never
+    hangs or errors" pattern rather than leaving name resolution broken.
+    """
     candidate_tokens = {
         _fold_accents(re.sub(r"'s$", "", word.lower()))
         for word in re.findall(r"[A-Za-zÀ-ÿ']+", question)
@@ -158,8 +211,99 @@ def resolve_player_names(question: str, players_rows: list) -> list:
     return list(matches.values())
 
 
-def get_groq_client() -> OpenAI:
-    return OpenAI(api_key=GROQ_API_KEY, base_url=GROQ_BASE_URL, timeout=GROQ_TIMEOUT_SECONDS)
+PLAYER_RESOLUTION_SYSTEM_PROMPT = """You resolve which real player(s) from a \
+football squad's roster a user is referring to, handling typos, nicknames, \
+partial names, and missing first names.
+
+You may ONLY use names that appear verbatim in the ROSTER below -- never \
+invent, correct the spelling of, or guess a name that isn't listed.
+
+Respond with ONLY this JSON shape, nothing else:
+{{"resolved": ["Exact Roster Name", ...], "possible": ["Exact Roster Name", ...]}}
+
+- "resolved": name(s) you are CONFIDENT the user means, even with a typo, \
+nickname, or only a last name -- as long as it's not genuinely ambiguous \
+with another roster player. If the recent conversation shows the user \
+confirming or naming a player you previously suggested, put that name here.
+- "possible": your best 1-2 guesses when you are NOT confident (e.g. a \
+surname shared by several roster players, or a name too different from \
+anything on the roster to be sure) -- leave "resolved" empty in that case.
+- If nothing in the roster is plausibly related to the question, return \
+both lists empty.
+
+{context}
+Current message: {question}
+
+ROSTER:
+{roster}"""
+
+
+def _resolve_players_via_llm(question: str, players_rows: list, context: Optional[str] = None):
+    roster_names = sorted({p["name"] for p in players_rows})
+    prompt = PLAYER_RESOLUTION_SYSTEM_PROMPT.format(
+        context=(context or ""),
+        question=question,
+        roster="\n".join(roster_names),
+    )
+    groq = get_groq_client()
+    response = groq.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": question},
+        ],
+        temperature=0,
+        max_tokens=200,
+    )
+    content = (response.choices[0].message.content or "").strip()
+    if content.startswith("```"):
+        content = content.strip("`").strip()
+        if content.lower().startswith("json"):
+            content = content[4:].strip()
+    parsed = json.loads(content)
+
+    name_to_player = {p["name"]: p for p in players_rows}
+    resolved = [name_to_player[n] for n in parsed.get("resolved", []) if n in name_to_player]
+    possible = [name_to_player[n] for n in parsed.get("possible", []) if n in name_to_player]
+    return resolved, possible
+
+
+@dataclass
+class NameResolution:
+    status: str  # "resolved" | "clarify" | "not_found"
+    players: list = field(default_factory=list)
+    message: str = ""
+
+
+def _clarifying_message(candidates: list) -> str:
+    names = [c["name"] for c in candidates]
+    if len(names) == 1:
+        return f"Did you mean {names[0]}? Please confirm or give me the full name."
+    return f"Did you mean {names[0]} or {names[1]}? Please let me know which one."
+
+
+def resolve_player_names(
+    question: str, players_rows: list, expected_count: int = 1, context: Optional[str] = None,
+) -> NameResolution:
+    try:
+        resolved, possible = _resolve_players_via_llm(question, players_rows, context=context)
+    except Exception as exc:
+        logger.warning(
+            "Player name resolver LLM call failed, falling back to substring "
+            "matching: %s (%s)", type(exc).__name__, str(exc),
+        )
+        fallback_matches = _resolve_player_names_by_substring(question, players_rows)
+        if len(fallback_matches) == expected_count:
+            return NameResolution(status="resolved", players=fallback_matches)
+        return NameResolution(status="not_found")
+
+    if len(resolved) == expected_count:
+        return NameResolution(status="resolved", players=resolved)
+
+    candidates = (possible or resolved)[:2]
+    if candidates:
+        return NameResolution(status="clarify", players=candidates, message=_clarifying_message(candidates))
+    return NameResolution(status="not_found")
 
 
 VALID_CATEGORIES = set(CATEGORY_KEYWORDS.keys())
@@ -185,16 +329,21 @@ over- or under-performing their xG
 Respond with EXACTLY ONE category name from the list above, or the word \
 none if the question doesn't clearly fit any of them. Respond with \
 nothing else: no punctuation, no explanation, and never answer the \
-question itself."""
+question itself.
+
+If the current message is a short reply (like "yes" or just a name) that \
+continues a previous question shown in the recent conversation, classify \
+it the same way you would have classified that previous question."""
 
 
-def _classify_intent_via_llm(question: str) -> Optional[str]:
+def _classify_intent_via_llm(question: str, context: Optional[str] = None) -> Optional[str]:
     groq = get_groq_client()
+    user_content = question if not context else f"{context}\nCurrent message: {question}"
     response = groq.chat.completions.create(
         model=GROQ_MODEL,
         messages=[
             {"role": "system", "content": CLASSIFIER_SYSTEM_PROMPT},
-            {"role": "user", "content": question},
+            {"role": "user", "content": user_content},
         ],
         temperature=0,
         max_tokens=20,
@@ -220,9 +369,9 @@ def _classify_intent_by_keywords(question: str) -> Optional[str]:
     return None
 
 
-def classify_intent(question: str) -> Optional[str]:
+def classify_intent(question: str, context: Optional[str] = None) -> Optional[str]:
     try:
-        return _classify_intent_via_llm(question)
+        return _classify_intent_via_llm(question, context=context)
     except Exception as exc:
         logger.warning(
             "Intent classifier LLM call failed, falling back to keyword "
@@ -248,18 +397,26 @@ class PlayerNotFoundError(Exception):
     pass
 
 
+class NeedsClarificationError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
 def _all_players(client):
     return client.table("players").select("id, name").execute().data
 
 
-def _resolve_single_player_id(question, client):
-    matches = resolve_player_names(question, _all_players(client))
-    if len(matches) != 1:
-        raise PlayerNotFoundError()
-    return matches[0]["id"]
+def _resolve_single_player_id(question, client, context=None):
+    resolution = resolve_player_names(question, _all_players(client), expected_count=1, context=context)
+    if resolution.status == "resolved":
+        return resolution.players[0]["id"]
+    if resolution.status == "clarify":
+        raise NeedsClarificationError(resolution.message)
+    raise PlayerNotFoundError()
 
 
-def _fetch_category_data(category, question, client, user):
+def _fetch_category_data(category, question, client, user, context=None):
     if category == "team_readiness":
         return fetch_readiness_data(client)
     if category == "team_season_stats":
@@ -280,47 +437,55 @@ def _fetch_category_data(category, question, client, user):
         return fetch_matches_summary_data(client)
 
     if category == "player_performance":
-        player_id = _resolve_single_player_id(question, client)
+        player_id = _resolve_single_player_id(question, client, context=context)
         performance = fetch_performance_data(client)
         return [row for row in performance if row["player_id"] == player_id]
 
     if category == "player_comparison":
-        matches = resolve_player_names(question, _all_players(client))
-        if len(matches) != 2:
+        resolution = resolve_player_names(question, _all_players(client), expected_count=2, context=context)
+        if resolution.status == "clarify":
+            raise NeedsClarificationError(resolution.message)
+        if resolution.status != "resolved":
             raise PlayerNotFoundError()
-        ids = {m["id"] for m in matches}
+        ids = {m["id"] for m in resolution.players}
         performance = fetch_performance_data(client)
         return [row for row in performance if row["player_id"] in ids]
 
     if category == "player_trend":
-        player_id = _resolve_single_player_id(question, client)
+        player_id = _resolve_single_player_id(question, client, context=context)
         trends = fetch_trends_data(client)
         filtered = [row for row in trends["data"] if row["player_id"] == player_id]
         return {**trends, "data": filtered}
 
     if category == "scouting_notes":
         notes = fetch_notes_data(client, player_id=None, author_id=user.id, role=user.role)
-        matches = resolve_player_names(question, _all_players(client))
-        if not matches:
+        resolution = resolve_player_names(question, _all_players(client), expected_count=1, context=context)
+        if resolution.status == "clarify":
+            raise NeedsClarificationError(resolution.message)
+        if resolution.status != "resolved":
             return notes
-        if len(matches) != 1:
-            raise PlayerNotFoundError()
-        player_id = matches[0]["id"]
+        player_id = resolution.players[0]["id"]
         return [n for n in notes if n["player_id"] == player_id]
 
     raise AssertionError(f"No fetch wiring for category: {category}")
 
 
-def answer_question(question: str, client, user) -> str:
-    category = classify_intent(question)
+def answer_question(
+    question: str, client, user, previous_question: Optional[str] = None,
+    previous_answer: Optional[str] = None,
+) -> str:
+    context = build_context(previous_question, previous_answer)
+    category = classify_intent(question, context=context)
     if category is None:
-        return OUT_OF_SCOPE_MESSAGE
+        return out_of_scope_message(user.role)
 
     if category not in ROLE_ALLOWED_CATEGORIES.get(user.role, set()):
-        return OUT_OF_SCOPE_MESSAGE
+        return out_of_scope_message(user.role)
 
     try:
-        data = _fetch_category_data(category, question, client, user)
+        data = _fetch_category_data(category, question, client, user, context=context)
+    except NeedsClarificationError as exc:
+        return exc.message
     except PlayerNotFoundError:
         return PLAYER_NOT_FOUND_MESSAGE
 

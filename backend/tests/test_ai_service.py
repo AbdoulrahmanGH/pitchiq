@@ -1,27 +1,52 @@
-"""Tests for app/services/ai_service.py -- the keyword-routed, Groq-backed
-assistant. Groq and the readiness data fetch are always mocked here (no
-real network calls); fetch_readiness_data's own behavior is covered by
-test_matches_router.py.
+"""Tests for app/services/ai_service.py -- the LLM-routed, Groq-backed
+assistant. Groq is always mocked here (no real network calls);
+fetch_readiness_data's own behavior is covered by test_matches_router.py.
 """
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.auth import AuthenticatedUser
 from app.services.ai_service import (
+    CATEGORY_DESCRIPTIONS,
     CATEGORY_KEYWORDS,
     FALLBACK_MESSAGE,
-    OUT_OF_SCOPE_MESSAGE,
     PLAYER_NOT_FOUND_MESSAGE,
     ROLE_ALLOWED_CATEGORIES,
     _classify_intent_by_keywords,
+    _resolve_player_names_by_substring,
     answer_question,
     classify_intent,
+    out_of_scope_message,
     resolve_player_names,
 )
 
 ANALYST_USER = AuthenticatedUser(id="user-1", email="analyst@example.com", role="analyst")
+
+
+def _mock_groq_calls(*contents):
+    """One mocked Groq client whose create() returns `contents` in order --
+    e.g. (classification, resolution_json, final_answer) for a question
+    that needs both classifying and a player name resolved.
+    """
+    responses = []
+    for content in contents:
+        r = MagicMock()
+        r.choices[0].message.content = content
+        responses.append(r)
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = responses
+    return mock_client
+
+
+def _mock_groq_with_content(content):
+    return _mock_groq_calls(content)
+
+
+def _resolution_json(resolved=None, possible=None):
+    return json.dumps({"resolved": resolved or [], "possible": possible or []})
 
 
 @pytest.mark.parametrize("question,expected_category", [
@@ -74,14 +99,6 @@ def test_keyword_classifier_returns_none_for_out_of_scope_questions(question):
 
 # ----------------------------- classify_intent (LLM + fallback) -----------------------------
 
-def _mock_groq_with_content(content):
-    mock_response = MagicMock()
-    mock_response.choices[0].message.content = content
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = mock_response
-    return mock_client
-
-
 def test_classify_intent_trusts_the_llm_even_where_keywords_would_miss():
     # "season average xg" contains none of player_performance's keywords --
     # a real failure found in live testing that motivated the LLM
@@ -113,7 +130,21 @@ def test_classify_intent_falls_back_to_keywords_when_llm_returns_invalid_categor
         assert classify_intent("Is the squad ready for Saturday?") == "team_readiness"
 
 
-# ----------------------------- resolve_player_names -----------------------------
+def test_classify_intent_threads_context_into_the_llm_call():
+    # A short confirmation reply ("yes") carries no topic signal on its own
+    # -- the recent-conversation context is what lets the classifier keep
+    # treating it as the same category as the question it's answering.
+    mock_client = _mock_groq_with_content("player_performance")
+    context = "Recent conversation:\nUser: How is Sarez performing?\nAssistant: Did you mean Luis Suarez?\n"
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = classify_intent("yes", context=context)
+
+    assert result == "player_performance"
+    user_message = mock_client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+    assert "Recent conversation" in user_message and "yes" in user_message
+
+
+# ----------------------- resolve_player_names (LLM + fallback) -----------------------
 
 SAMPLE_PLAYERS = [
     {"id": 1, "name": "Lionel Andrés Messi Cuccittini"},
@@ -123,60 +154,193 @@ SAMPLE_PLAYERS = [
 ]
 
 
-def test_resolve_player_names_finds_exact_single_match():
-    result = resolve_player_names("How is Messi performing?", SAMPLE_PLAYERS)
+def test_resolve_player_names_resolves_a_confident_single_match():
+    mock_client = _mock_groq_with_content(_resolution_json(resolved=["Lionel Andrés Messi Cuccittini"]))
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("How is Messi performing?", SAMPLE_PLAYERS)
+
+    assert result.status == "resolved"
+    assert [p["id"] for p in result.players] == [1]
+
+
+def test_resolve_player_names_resolves_a_typo_confidently():
+    # "Nemar" is a typo, but unambiguous against this roster -- the LLM
+    # resolver (unlike the old substring matcher) is expected to handle
+    # this directly rather than declining or asking for clarification.
+    players = SAMPLE_PLAYERS + [{"id": 6, "name": "Neymar da Silva Santos Júnior"}]
+    mock_client = _mock_groq_with_content(_resolution_json(resolved=["Neymar da Silva Santos Júnior"]))
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("How is Nemar doing?", players)
+
+    assert result.status == "resolved"
+    assert [p["id"] for p in result.players] == [6]
+
+
+def test_resolve_player_names_resolves_two_confident_matches_for_comparison():
+    resolved_json = _resolution_json(resolved=["Lionel Andrés Messi Cuccittini", "Sergio Busquets i Burgos"])
+    mock_client = _mock_groq_with_content(resolved_json)
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("Compare Messi and Busquets", SAMPLE_PLAYERS, expected_count=2)
+
+    assert result.status == "resolved"
+    assert {p["id"] for p in result.players} == {1, 2}
+
+
+def test_resolve_player_names_returns_clarify_for_an_ambiguous_surname():
+    players = [
+        {"id": 5, "name": "Luis Alberto Suárez Díaz"},
+        {"id": 7, "name": "Denis Suárez Fernández"},
+    ]
+    possible_json = _resolution_json(possible=["Luis Alberto Suárez Díaz", "Denis Suárez Fernández"])
+    mock_client = _mock_groq_with_content(possible_json)
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("How's Sarez doing?", players)
+
+    assert result.status == "clarify"
+    assert {p["id"] for p in result.players} == {5, 7}
+    assert "Luis Alberto Suárez Díaz" in result.message
+    assert "?" in result.message
+
+
+def test_resolve_player_names_returns_not_found_when_nothing_plausible():
+    mock_client = _mock_groq_with_content(_resolution_json())
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("How is Xyzzyplonk doing?", SAMPLE_PLAYERS)
+
+    assert result.status == "not_found"
+    assert result.players == []
+
+
+def test_resolve_player_names_ignores_a_name_not_on_the_roster():
+    # Defense against hallucination: even if the LLM disobeys the "only
+    # from the roster" instruction, an invented name must never survive.
+    mock_client = _mock_groq_with_content(_resolution_json(resolved=["Someone Not On The Roster"]))
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("How is Messi doing?", SAMPLE_PLAYERS)
+
+    assert result.status == "not_found"
+
+
+def test_resolve_player_names_handles_markdown_fenced_json_response():
+    fenced = "```json\n" + _resolution_json(resolved=["Lionel Andrés Messi Cuccittini"]) + "\n```"
+    mock_client = _mock_groq_with_content(fenced)
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("How is Messi doing?", SAMPLE_PLAYERS)
+
+    assert result.status == "resolved"
+    assert result.players[0]["id"] == 1
+
+
+def test_resolve_player_names_resolves_a_confirmation_reply_using_context():
+    players = [{"id": 5, "name": "Luis Alberto Suárez Díaz"}]
+    mock_client = _mock_groq_with_content(_resolution_json(resolved=["Luis Alberto Suárez Díaz"]))
+    context = (
+        "Recent conversation:\nUser: How's Sarez doing?\n"
+        "Assistant: Did you mean Luis Alberto Suárez Díaz? Please confirm or give me the full name.\n"
+    )
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("yes", players, context=context)
+
+    assert result.status == "resolved"
+    assert result.players[0]["id"] == 5
+    system_message = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "Recent conversation" in system_message
+
+
+def test_resolve_player_names_falls_back_to_substring_matching_when_llm_call_raises():
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = TimeoutError("Groq timed out")
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("How is Messi performing?", SAMPLE_PLAYERS)
+
+    assert result.status == "resolved"
+    assert result.players[0]["id"] == 1
+
+
+def test_resolve_player_names_falls_back_to_not_found_when_llm_call_raises_and_substring_is_ambiguous():
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = TimeoutError("Groq timed out")
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("How does Alex compare to the rest?", SAMPLE_PLAYERS)
+
+    assert result.status == "not_found"
+
+
+def test_resolve_player_names_falls_back_when_llm_returns_invalid_json():
+    mock_client = _mock_groq_with_content("not valid json")
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = resolve_player_names("How is Messi performing?", SAMPLE_PLAYERS)
+
+    assert result.status == "resolved"
+    assert result.players[0]["id"] == 1
+
+
+# ------------------------ _resolve_player_names_by_substring (fallback only) ------------------------
+
+def test_substring_fallback_finds_exact_single_match():
+    result = _resolve_player_names_by_substring("How is Messi performing?", SAMPLE_PLAYERS)
 
     assert len(result) == 1
     assert result[0]["id"] == 1
 
 
-def test_resolve_player_names_returns_empty_when_no_name_mentioned():
-    result = resolve_player_names("How is the team doing overall?", SAMPLE_PLAYERS)
+def test_substring_fallback_returns_empty_when_no_name_mentioned():
+    result = _resolve_player_names_by_substring("How is the team doing overall?", SAMPLE_PLAYERS)
 
     assert result == []
 
 
-def test_resolve_player_names_returns_all_matches_when_ambiguous():
-    # Both "Alex Martinez" and "Alex Garcia" share the token "Alex" --
-    # resolve_player_names returns both, leaving the arity check (exactly
-    # 1 expected) to the caller, which is what produces the ambiguous
-    # "couldn't find" behavior downstream.
-    result = resolve_player_names("How does Alex compare to the rest?", SAMPLE_PLAYERS)
+def test_substring_fallback_returns_all_matches_when_ambiguous():
+    result = _resolve_player_names_by_substring("How does Alex compare to the rest?", SAMPLE_PLAYERS)
 
     assert {p["id"] for p in result} == {3, 4}
 
 
-def test_resolve_player_names_matches_accented_name_typed_without_accent():
+def test_substring_fallback_matches_accented_name_typed_without_accent():
     # Real regression found via live verification: a coach typing "Suarez"
     # (plain ASCII, the common casual spelling) must still resolve against
     # the database's real accented name "Suárez".
     players = [{"id": 5, "name": "Luis Alberto Suárez Díaz"}]
 
-    result = resolve_player_names("Compare Messi and Suarez this season", players + SAMPLE_PLAYERS)
+    result = _resolve_player_names_by_substring("Compare Messi and Suarez this season", players + SAMPLE_PLAYERS)
 
     assert {p["id"] for p in result} == {1, 5}
 
 
-def test_resolve_player_names_matches_accented_name_typed_with_its_own_accent():
-    # The other direction of the accent-folding fix: a question that types
-    # the name correctly (with its accent) must still resolve, proving the
-    # fold is applied symmetrically to both sides, not just the ASCII case.
+def test_substring_fallback_matches_accented_name_typed_with_its_own_accent():
     players = [{"id": 5, "name": "Luis Alberto Suárez Díaz"}]
 
-    result = resolve_player_names("What are Suárez's stats?", players)
+    result = _resolve_player_names_by_substring("What are Suárez's stats?", players)
 
     assert {p["id"] for p in result} == {5}
 
 
-def test_resolve_player_names_finds_two_distinct_matches_for_comparison():
-    result = resolve_player_names("Compare Messi and Busquets this season", SAMPLE_PLAYERS)
+def test_substring_fallback_finds_two_distinct_matches_for_comparison():
+    result = _resolve_player_names_by_substring("Compare Messi and Busquets this season", SAMPLE_PLAYERS)
 
     assert {p["id"] for p in result} == {1, 2}
 
 
+# --------------------------------- out_of_scope_message ---------------------------------
+
+def test_out_of_scope_message_is_built_from_role_allowed_categories():
+    for role in ("analyst", "coach", "scout"):
+        message = out_of_scope_message(role)
+        for category in ROLE_ALLOWED_CATEGORIES[role]:
+            assert CATEGORY_DESCRIPTIONS[category] in message
+        for category in set(CATEGORY_KEYWORDS) - ROLE_ALLOWED_CATEGORIES[role]:
+            assert CATEGORY_DESCRIPTIONS[category] not in message
+
+
+def test_out_of_scope_messages_differ_across_roles():
+    messages = {role: out_of_scope_message(role) for role in ("analyst", "coach", "scout")}
+
+    assert len(set(messages.values())) == 3
+
+
 # --------------------------------- answer_question ---------------------------------
 
-def test_out_of_scope_question_returns_fixed_message_without_fetching_or_answering():
+def test_out_of_scope_question_returns_role_message_without_fetching_or_answering():
     # classify_intent always makes one Groq call (classification) -- but a
     # confident "none" must short-circuit before any data fetch or second
     # (answer-generation) Groq call.
@@ -185,7 +349,7 @@ def test_out_of_scope_question_returns_fixed_message_without_fetching_or_answeri
          patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
         result = answer_question("What's the weather like today?", MagicMock(), ANALYST_USER)
 
-    assert result == OUT_OF_SCOPE_MESSAGE
+    assert result == out_of_scope_message("analyst")
     mock_fetch.assert_not_called()
     assert mock_groq_client.chat.completions.create.call_count == 1
 
@@ -240,7 +404,7 @@ def test_role_allowed_categories_matches_the_spec():
     ("coach", "Who tops the season rankings?", "season_rankings", "app.services.ai_service.fetch_rankings_data"),
     ("scout", "Is the squad ready for Saturday?", "team_readiness", "app.services.ai_service.fetch_readiness_data"),
 ])
-def test_role_gating_blocks_disallowed_category_with_generic_message(
+def test_role_gating_blocks_disallowed_category_with_role_specific_message(
     role, question, classified_category, fetch_patch_target,
 ):
     user = AuthenticatedUser(id="user-1", email="x@example.com", role=role)
@@ -249,7 +413,7 @@ def test_role_gating_blocks_disallowed_category_with_generic_message(
          patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
         result = answer_question(question, MagicMock(), user)
 
-    assert result == OUT_OF_SCOPE_MESSAGE
+    assert result == out_of_scope_message(role)
     mock_fetch.assert_not_called()
     assert mock_groq_client.chat.completions.create.call_count == 1
 
@@ -292,21 +456,20 @@ def test_player_performance_question_resolves_name_and_filters_to_that_player():
         {"player_id": 1, "name": "Lionel Messi", "total_goals": 40},
         {"player_id": 2, "name": "Luis Suarez", "total_goals": 30},
     ]
-    mock_groq_response = MagicMock()
-    mock_groq_response.choices[0].message.content = "Messi has scored 40 goals."
-    mock_groq_client = MagicMock()
-    mock_groq_client.chat.completions.create.return_value = mock_groq_response
+    mock_client = _mock_groq_calls(
+        "player_performance", _resolution_json(resolved=["Lionel Messi"]), "Messi has scored 40 goals.",
+    )
     fake_client = MagicMock()
     fake_client.table.return_value.select.return_value.execute.return_value.data = [
         {"id": 1, "name": "Lionel Messi"}, {"id": 2, "name": "Luis Suarez"},
     ]
 
     with patch("app.services.ai_service.fetch_performance_data", return_value=performance_rows), \
-         patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
         result = answer_question("How is Messi performing this season?", fake_client, ANALYST_USER)
 
     assert result == "Messi has scored 40 goals."
-    prompt = mock_groq_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
     assert "40" in prompt and "Suarez" not in prompt  # filtered to Messi only
 
 
@@ -315,15 +478,15 @@ def test_player_performance_question_with_unresolvable_name_returns_not_found_me
     fake_client.table.return_value.select.return_value.execute.return_value.data = [
         {"id": 1, "name": "Lionel Messi"},
     ]
-    mock_groq_client = _mock_groq_with_content("player_performance")
+    mock_client = _mock_groq_calls("player_performance", _resolution_json())
 
     with patch("app.services.ai_service.fetch_performance_data") as mock_fetch, \
-         patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
         result = answer_question("How is Ronaldo performing this season?", fake_client, ANALYST_USER)
 
     assert result == PLAYER_NOT_FOUND_MESSAGE
     mock_fetch.assert_not_called()
-    assert mock_groq_client.chat.completions.create.call_count == 1  # classification only, no wasted answer call
+    assert mock_client.chat.completions.create.call_count == 2  # classify + resolve, no wasted answer call
 
 
 def test_player_comparison_question_resolves_two_names_and_filters_to_both():
@@ -332,10 +495,11 @@ def test_player_comparison_question_resolves_two_names_and_filters_to_both():
         {"player_id": 2, "name": "Luis Suarez", "total_goals": 30},
         {"player_id": 3, "name": "Sergio Busquets", "total_goals": 2},
     ]
-    mock_groq_response = MagicMock()
-    mock_groq_response.choices[0].message.content = "Messi has outscored Suarez this season."
-    mock_groq_client = MagicMock()
-    mock_groq_client.chat.completions.create.return_value = mock_groq_response
+    mock_client = _mock_groq_calls(
+        "player_comparison",
+        _resolution_json(resolved=["Lionel Messi", "Luis Suarez"]),
+        "Messi has outscored Suarez this season.",
+    )
     fake_client = MagicMock()
     fake_client.table.return_value.select.return_value.execute.return_value.data = [
         {"id": 1, "name": "Lionel Messi"}, {"id": 2, "name": "Luis Suarez"},
@@ -343,11 +507,11 @@ def test_player_comparison_question_resolves_two_names_and_filters_to_both():
     ]
 
     with patch("app.services.ai_service.fetch_performance_data", return_value=performance_rows), \
-         patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
         result = answer_question("Compare Messi and Suarez this season", fake_client, ANALYST_USER)
 
     assert result == "Messi has outscored Suarez this season."
-    prompt = mock_groq_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
     assert "Busquets" not in prompt  # only the 2 compared players included
 
 
@@ -359,30 +523,26 @@ def test_player_trend_question_filters_rolling_xg_data_to_resolved_player():
             {"player_id": 2, "match_date": "2015-08-23", "xg": 0.1, "rolling_3match_avg_xg": 0.1},
         ],
     }
-    mock_groq_response = MagicMock()
-    mock_groq_response.choices[0].message.content = "Messi's form is trending up."
-    mock_groq_client = MagicMock()
-    mock_groq_client.chat.completions.create.return_value = mock_groq_response
+    mock_client = _mock_groq_calls(
+        "player_trend", _resolution_json(resolved=["Lionel Messi"]), "Messi's form is trending up.",
+    )
     fake_client = MagicMock()
     fake_client.table.return_value.select.return_value.execute.return_value.data = [
         {"id": 1, "name": "Lionel Messi"}, {"id": 2, "name": "Luis Suarez"},
     ]
 
     with patch("app.services.ai_service.fetch_trends_data", return_value=trend_data), \
-         patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
         result = answer_question("What's Messi's recent form like?", fake_client, ANALYST_USER)
 
     assert result == "Messi's form is trending up."
-    prompt = mock_groq_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
     assert "0.4" in prompt and "0.1" not in prompt  # only player_id 1's rows kept
 
 
 def test_scouting_notes_question_without_a_name_returns_all_caller_notes():
     notes = [{"player_id": 1, "note": "Sharp finishing"}, {"player_id": 2, "note": "Needs work off the ball"}]
-    mock_groq_response = MagicMock()
-    mock_groq_response.choices[0].message.content = "You have 2 scouting notes."
-    mock_groq_client = MagicMock()
-    mock_groq_client.chat.completions.create.return_value = mock_groq_response
+    mock_client = _mock_groq_calls("scouting_notes", _resolution_json(), "You have 2 scouting notes.")
     scout_user = AuthenticatedUser(id="scout-1", email="scout@example.com", role="scout")
     fake_client = MagicMock()
     fake_client.table.return_value.select.return_value.execute.return_value.data = [
@@ -390,7 +550,7 @@ def test_scouting_notes_question_without_a_name_returns_all_caller_notes():
     ]
 
     with patch("app.services.ai_service.fetch_notes_data", return_value=notes) as mock_fetch, \
-         patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
         result = answer_question("What are my scouting notes?", fake_client, scout_user)
 
     assert result == "You have 2 scouting notes."
@@ -399,10 +559,9 @@ def test_scouting_notes_question_without_a_name_returns_all_caller_notes():
 
 def test_scouting_notes_question_with_a_name_filters_to_that_player():
     notes = [{"player_id": 1, "note": "Sharp finishing"}, {"player_id": 2, "note": "Needs work off the ball"}]
-    mock_groq_response = MagicMock()
-    mock_groq_response.choices[0].message.content = "You noted Messi's sharp finishing."
-    mock_groq_client = MagicMock()
-    mock_groq_client.chat.completions.create.return_value = mock_groq_response
+    mock_client = _mock_groq_calls(
+        "scouting_notes", _resolution_json(resolved=["Lionel Messi"]), "You noted Messi's sharp finishing.",
+    )
     scout_user = AuthenticatedUser(id="scout-1", email="scout@example.com", role="scout")
     fake_client = MagicMock()
     fake_client.table.return_value.select.return_value.execute.return_value.data = [
@@ -410,30 +569,99 @@ def test_scouting_notes_question_with_a_name_filters_to_that_player():
     ]
 
     with patch("app.services.ai_service.fetch_notes_data", return_value=notes), \
-         patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
         result = answer_question("What are my scouting notes on Messi?", fake_client, scout_user)
 
     assert result == "You noted Messi's sharp finishing."
-    prompt = mock_groq_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
     assert "Needs work off the ball" not in prompt
+
+
+# ------------------------- name resolution: clarify + follow-up memory -------------------------
+
+def test_misspelled_name_resolves_confidently_end_to_end():
+    performance_rows = [{"player_id": 6, "name": "Neymar da Silva Santos Junior", "total_goals": 20}]
+    mock_client = _mock_groq_calls(
+        "player_performance",
+        _resolution_json(resolved=["Neymar da Silva Santos Junior"]),
+        "Neymar has scored 20 goals.",
+    )
+    fake_client = MagicMock()
+    fake_client.table.return_value.select.return_value.execute.return_value.data = [
+        {"id": 6, "name": "Neymar da Silva Santos Junior"},
+    ]
+
+    with patch("app.services.ai_service.fetch_performance_data", return_value=performance_rows), \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = answer_question("How is Nemar performing?", fake_client, ANALYST_USER)
+
+    assert result == "Neymar has scored 20 goals."
+
+
+def test_ambiguous_name_returns_clarifying_question_not_a_flat_decline():
+    mock_client = _mock_groq_calls(
+        "player_performance",
+        _resolution_json(possible=["Luis Alberto Suarez Diaz", "Denis Suarez Fernandez"]),
+    )
+    fake_client = MagicMock()
+    fake_client.table.return_value.select.return_value.execute.return_value.data = [
+        {"id": 5, "name": "Luis Alberto Suarez Diaz"}, {"id": 7, "name": "Denis Suarez Fernandez"},
+    ]
+
+    with patch("app.services.ai_service.fetch_performance_data") as mock_fetch, \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = answer_question("How is Sarez performing?", fake_client, ANALYST_USER)
+
+    assert result != PLAYER_NOT_FOUND_MESSAGE
+    assert "Luis Alberto Suarez Diaz" in result
+    assert "?" in result
+    mock_fetch.assert_not_called()
+
+
+def test_followup_confirmation_resolves_the_clarified_player():
+    performance_rows = [{"player_id": 5, "name": "Luis Alberto Suarez Diaz", "total_goals": 25}]
+    mock_client = _mock_groq_calls(
+        "player_performance",
+        _resolution_json(resolved=["Luis Alberto Suarez Diaz"]),
+        "Suarez has scored 25 goals.",
+    )
+    fake_client = MagicMock()
+    fake_client.table.return_value.select.return_value.execute.return_value.data = [
+        {"id": 5, "name": "Luis Alberto Suarez Diaz"},
+    ]
+
+    with patch("app.services.ai_service.fetch_performance_data", return_value=performance_rows), \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = answer_question(
+            "yes", fake_client, ANALYST_USER,
+            previous_question="How is Sarez performing?",
+            previous_answer="Did you mean Luis Alberto Suarez Diaz? Please confirm or give me the full name.",
+        )
+
+    assert result == "Suarez has scored 25 goals."
+    calls = mock_client.chat.completions.create.call_args_list
+    assert "Recent conversation" in calls[0].kwargs["messages"][1]["content"]  # classify call
+    assert "Recent conversation" in calls[1].kwargs["messages"][0]["content"]  # resolve call
+
+
+def test_truly_unmatchable_name_still_declines():
+    mock_client = _mock_groq_calls("player_performance", _resolution_json())
+    fake_client = MagicMock()
+    fake_client.table.return_value.select.return_value.execute.return_value.data = [
+        {"id": 1, "name": "Lionel Messi"},
+    ]
+
+    with patch("app.services.ai_service.fetch_performance_data") as mock_fetch, \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = answer_question("How is Zzyzx performing?", fake_client, ANALYST_USER)
+
+    assert result == PLAYER_NOT_FOUND_MESSAGE
+    mock_fetch.assert_not_called()
 
 
 # ------------------------- regressions from live testing -------------------------
 # Each of these reproduces one exact question that failed in real (non-mocked)
-# testing before this pass. The mocked groq client's create() side_effect is a
-# 2-item list: the first call is classify_intent's classification call, the
-# second is the final answer-generation call -- this lets each test control
-# both independently instead of relying on one shared return_value.
-
-def _mock_groq_two_calls(classification, answer_text):
-    classify_response = MagicMock()
-    classify_response.choices[0].message.content = classification
-    answer_response = MagicMock()
-    answer_response.choices[0].message.content = answer_text
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = [classify_response, answer_response]
-    return mock_client
-
+# testing before this pass.
 
 def test_season_average_xg_question_classifies_as_player_performance():
     # Real failure: keyword matching has no "average"/"season"/"xg" keyword
@@ -442,7 +670,9 @@ def test_season_average_xg_question_classifies_as_player_performance():
         {"player_id": 1, "name": "Lionel Messi", "xg": 27.65},
         {"player_id": 2, "name": "Luis Suarez", "xg": 18.0},
     ]
-    mock_client = _mock_groq_two_calls("player_performance", "Messi's season xG is 27.65.")
+    mock_client = _mock_groq_calls(
+        "player_performance", _resolution_json(resolved=["Lionel Messi"]), "Messi's season xG is 27.65.",
+    )
     fake_client = MagicMock()
     fake_client.table.return_value.select.return_value.execute.return_value.data = [
         {"id": 1, "name": "Lionel Messi"}, {"id": 2, "name": "Luis Suarez"},
@@ -461,7 +691,7 @@ def test_ppda_trend_question_classifies_as_team_season_stats():
     # Real failure: no category existed for team-wide PPDA/field-tilt
     # questions at all.
     team_info = {"team_name": "Barcelona", "season_ppda_avg": 9.3, "season_field_tilt_avg": 61.2}
-    mock_client = _mock_groq_two_calls("team_season_stats", "Our season PPDA average is 9.3.")
+    mock_client = _mock_groq_calls("team_season_stats", "Our season PPDA average is 9.3.")
 
     with patch("app.services.ai_service.fetch_team_info_data", return_value=team_info) as mock_fetch, \
          patch("app.services.ai_service.get_groq_client", return_value=mock_client):
@@ -478,7 +708,7 @@ def test_analyst_asking_about_notes_on_this_player_gets_every_scouts_notes():
         {"player_id": 1, "author_id": "scout-1", "note": "Sharp finishing"},
         {"player_id": 2, "author_id": "scout-2", "note": "Needs work off the ball"},
     ]
-    mock_client = _mock_groq_two_calls("scouting_notes", "There are 2 scouting notes on file.")
+    mock_client = _mock_groq_calls("scouting_notes", _resolution_json(), "There are 2 scouting notes on file.")
     analyst_user = AuthenticatedUser(id="analyst-1", email="analyst@example.com", role="analyst")
     fake_client = MagicMock()
     fake_client.table.return_value.select.return_value.execute.return_value.data = [
@@ -504,7 +734,7 @@ def test_outperforming_xg_question_sorts_rankings_by_goals_minus_xg_desc():
             {"player_id": 2, "season_goals": 30, "season_xg": 18.0, "goals_minus_xg": 12.0},
         ],
     }
-    mock_client = _mock_groq_two_calls("season_rankings", "Player 2 is outperforming their xG the most.")
+    mock_client = _mock_groq_calls("season_rankings", "Player 2 is outperforming their xG the most.")
 
     with patch("app.services.ai_service.fetch_rankings_data", return_value=rankings_data), \
          patch("app.services.ai_service.get_groq_client", return_value=mock_client):
@@ -528,7 +758,7 @@ def test_outperforming_xg_question_surfaces_player_names_not_bare_ids():
              "name": "Luis Suarez", "nickname": "Suarez"},
         ],
     }
-    mock_client = _mock_groq_two_calls("season_rankings", "Luis Suarez is outperforming their xG the most.")
+    mock_client = _mock_groq_calls("season_rankings", "Luis Suarez is outperforming their xG the most.")
 
     with patch("app.services.ai_service.fetch_rankings_data", return_value=rankings_data), \
          patch("app.services.ai_service.get_groq_client", return_value=mock_client):
@@ -549,7 +779,7 @@ def test_availability_question_surfaces_full_squad_with_default_status_and_names
         {"player_id": 2, "status": "available", "note": None, "updated_by": None,
          "updated_at": None, "name": "Luis Suarez", "nickname": "Suarez"},
     ]
-    mock_client = _mock_groq_two_calls("availability", "Messi is doubtful; Suarez is available.")
+    mock_client = _mock_groq_calls("availability", "Messi is doubtful; Suarez is available.")
     coach_user = AuthenticatedUser(id="coach-1", email="coach@example.com", role="coach")
 
     with patch("app.services.ai_service.fetch_player_statuses_data", return_value=statuses), \
