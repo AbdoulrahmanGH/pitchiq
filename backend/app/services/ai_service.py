@@ -8,6 +8,7 @@ mechanism-design.md for the full design.
 """
 
 import logging
+import re
 from typing import Optional
 
 from openai import OpenAI
@@ -23,10 +24,39 @@ GROQ_TIMEOUT_SECONDS = 10
 
 CATEGORY_KEYWORDS = {
     "team_readiness": [
-        "readiness", "ready", "available", "availability", "fit", "fitness",
-        "injury", "injured", "injuries", "doubtful", "unavailable", "rest",
-        "fatigue", "fatigued", "tired", "rotation", "rotate", "match fit",
-        "squad status",
+        "readiness", "ready", "prepared", "fit", "fitness",
+        "squad status", "match fit",
+    ],
+    "player_fatigue": [
+        "fatigue", "fatigued", "tired", "overworked", "workload",
+        "rotation", "rotate",
+    ],
+    "squad_depth": [
+        "depth", "backup", "bench", "cover", "reserves",
+    ],
+    "availability": [
+        "available", "availability", "unavailable", "doubtful",
+        "injury", "injured", "injuries",
+    ],
+    "player_performance": [
+        "performance", "performing", "performed", "perform", "stats",
+        "statistics", "goals", "assists",
+    ],
+    "player_comparison": [
+        "compare", "comparison", "versus", "vs", "better",
+    ],
+    "season_rankings": [
+        "ranking", "rankings", "rank", "ranked", "leaderboard",
+    ],
+    "player_trend": [
+        "trend", "trending", "form",
+    ],
+    "match_summary": [
+        "fixture", "fixtures", "match result", "recent matches",
+        "last match", "how did we do",
+    ],
+    "scouting_notes": [
+        "scouting note", "scouting notes", "my notes", "note about",
     ],
 }
 
@@ -78,9 +108,14 @@ def _build_system_prompt(readiness_data: dict) -> str:
 
 def classify_intent(question: str) -> Optional[str]:
     lowered = question.lower()
+    words = set(re.findall(r"[a-z']+", lowered))
     for category, keywords in CATEGORY_KEYWORDS.items():
-        if any(keyword in lowered for keyword in keywords):
-            return category
+        for keyword in keywords:
+            if " " in keyword:
+                if keyword in lowered:
+                    return category
+            elif keyword in words:
+                return category
     return None
 
 

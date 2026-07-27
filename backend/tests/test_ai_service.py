@@ -11,15 +11,31 @@ import pytest
 from app.services.ai_service import FALLBACK_MESSAGE, OUT_OF_SCOPE_MESSAGE, answer_question, classify_intent
 
 
-@pytest.mark.parametrize("question", [
-    "Who's at risk of fatigue right now?",
-    "Is Messi available for Saturday's match?",
-    "Which players are doubtful this week?",
-    "How fit is the squad for the next game?",
-    "Any injuries I should know about before matchday?",
+@pytest.mark.parametrize("question,expected_category", [
+    ("Is the squad ready for Saturday?", "team_readiness"),
+    ("How fit is the squad for the next game?", "team_readiness"),
+    ("Who's at risk of fatigue right now?", "player_fatigue"),
+    ("Is anyone overworked this month?", "player_fatigue"),
+    ("How much depth do we have at center back?", "squad_depth"),
+    ("Who's our backup goalkeeper?", "squad_depth"),
+    ("Is Messi available for Saturday's match?", "availability"),
+    ("Which players are doubtful this week?", "availability"),
+    ("Any injuries I should know about before matchday?", "availability"),
+    ("How is Messi performing this season?", "player_performance"),
+    ("What are Suarez's stats?", "player_performance"),
+    ("Compare Messi and Suarez this season", "player_comparison"),
+    ("Who is better, Messi or Suarez?", "player_comparison"),
+    ("Who tops the season rankings?", "season_rankings"),
+    ("What's the goal ranking this season?", "season_rankings"),
+    ("What's Messi's recent form like?", "player_trend"),
+    ("Is Suarez trending up in xG?", "player_trend"),
+    ("How did we do against Real Madrid?", "match_summary"),
+    ("What was the result of our last match?", "match_summary"),
+    ("What are my scouting notes on Messi?", "scouting_notes"),
+    ("Show me my notes about Suarez", "scouting_notes"),
 ])
-def test_classify_intent_matches_readiness_questions(question):
-    assert classify_intent(question) == "team_readiness"
+def test_classify_intent_matches_expected_category(question, expected_category):
+    assert classify_intent(question) == expected_category
 
 
 @pytest.mark.parametrize("question", [
@@ -27,8 +43,13 @@ def test_classify_intent_matches_readiness_questions(question):
     "Should we sign a new striker this window?",
     "What formation should we use against Real Madrid?",
     "Who won the league last season?",
+    "Have we already played Real Madrid this season?",
 ])
 def test_classify_intent_returns_none_for_out_of_scope_questions(question):
+    # The last two cases are regression tests for the whole-word matching
+    # fix: "formation" must not match the "form" keyword (player_trend),
+    # and "already" must not match the "ready" keyword (team_readiness) --
+    # both would false-positive under naive substring matching.
     assert classify_intent(question) is None
 
 
