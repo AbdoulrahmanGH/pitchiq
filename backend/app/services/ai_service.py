@@ -106,6 +106,25 @@ def _build_system_prompt(readiness_data: dict) -> str:
     )
 
 
+PLAYER_NOT_FOUND_MESSAGE = (
+    "I couldn't find that player. Please use their name as it appears "
+    "in the squad."
+)
+
+
+def resolve_player_names(question: str, players_rows: list) -> list:
+    candidate_tokens = {
+        word.lower() for word in re.findall(r"[A-Za-z']+", question)
+        if word[0].isupper() and len(word) >= 3
+    }
+    matches = {}
+    for player in players_rows:
+        name_words = set(re.findall(r"[a-z']+", player["name"].lower()))
+        if candidate_tokens & name_words:
+            matches[player["id"]] = player
+    return list(matches.values())
+
+
 def classify_intent(question: str) -> Optional[str]:
     lowered = question.lower()
     words = set(re.findall(r"[a-z']+", lowered))

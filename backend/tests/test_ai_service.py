@@ -8,7 +8,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.ai_service import FALLBACK_MESSAGE, OUT_OF_SCOPE_MESSAGE, answer_question, classify_intent
+from app.services.ai_service import (
+    FALLBACK_MESSAGE,
+    OUT_OF_SCOPE_MESSAGE,
+    answer_question,
+    classify_intent,
+    resolve_player_names,
+)
 
 
 @pytest.mark.parametrize("question,expected_category", [
@@ -51,6 +57,45 @@ def test_classify_intent_returns_none_for_out_of_scope_questions(question):
     # and "already" must not match the "ready" keyword (team_readiness) --
     # both would false-positive under naive substring matching.
     assert classify_intent(question) is None
+
+
+# ----------------------------- resolve_player_names -----------------------------
+
+SAMPLE_PLAYERS = [
+    {"id": 1, "name": "Lionel Andrés Messi Cuccittini"},
+    {"id": 2, "name": "Sergio Busquets i Burgos"},
+    {"id": 3, "name": "Alex Martinez"},
+    {"id": 4, "name": "Alex Garcia"},
+]
+
+
+def test_resolve_player_names_finds_exact_single_match():
+    result = resolve_player_names("How is Messi performing?", SAMPLE_PLAYERS)
+
+    assert len(result) == 1
+    assert result[0]["id"] == 1
+
+
+def test_resolve_player_names_returns_empty_when_no_name_mentioned():
+    result = resolve_player_names("How is the team doing overall?", SAMPLE_PLAYERS)
+
+    assert result == []
+
+
+def test_resolve_player_names_returns_all_matches_when_ambiguous():
+    # Both "Alex Martinez" and "Alex Garcia" share the token "Alex" --
+    # resolve_player_names returns both, leaving the arity check (exactly
+    # 1 expected) to the caller, which is what produces the ambiguous
+    # "couldn't find" behavior downstream.
+    result = resolve_player_names("How does Alex compare to the rest?", SAMPLE_PLAYERS)
+
+    assert {p["id"] for p in result} == {3, 4}
+
+
+def test_resolve_player_names_finds_two_distinct_matches_for_comparison():
+    result = resolve_player_names("Compare Messi and Busquets this season", SAMPLE_PLAYERS)
+
+    assert {p["id"] for p in result} == {1, 2}
 
 
 # --------------------------------- answer_question ---------------------------------
