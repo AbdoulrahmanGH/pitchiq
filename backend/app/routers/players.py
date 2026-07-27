@@ -158,45 +158,58 @@ def _players_by_id(client, player_ids):
                       "primary_position": r["primary_position"]} for r in rows}
 
 
-@router.get("/performance")
-def get_player_performance(_user: AuthenticatedUser = Depends(get_current_user)):
-    supabase = get_db()
-
-    stats_rows = supabase.table("player_match_stats").select(
+def fetch_performance_data(client):
+    stats_rows = client.table("player_match_stats").select(
         "player_id, team_id, minutes_played, passes_attempted, passes_completed, "
         "key_passes, progressive_passes, shots, goals, assists, xg, xa, "
         "dribbles_attempted, dribbles_completed, progressive_carries, tackles, "
         "pressures, pressure_regains"
     ).execute().data
 
-    players_by_id = _players_by_id(supabase, {r["player_id"] for r in stats_rows})
+    players_by_id = _players_by_id(client, {r["player_id"] for r in stats_rows})
     performance = aggregate_performance(stats_rows, players_by_id)
 
-    teams_rows = supabase.table("teams").select("id, name").execute().data
+    teams_rows = client.table("teams").select("id, name").execute().data
     teams_by_id = {t["id"]: t["name"] for t in teams_rows}
     return attach_team_names(performance, teams_by_id)
 
 
-@router.get("/fatigue-risk")
-def get_fatigue_risk(_user: AuthenticatedUser = Depends(get_current_user)):
-    supabase = get_db()
-    return get_at_risk_players(supabase, BARCELONA_TEAM_ID)
+def fetch_fatigue_data(client):
+    return get_at_risk_players(client, BARCELONA_TEAM_ID)
 
 
-@router.get("/depth")
-def get_squad_depth(_user: AuthenticatedUser = Depends(get_current_user)):
-    supabase = get_db()
-
-    pms_rows = supabase.table("player_match_stats").select("player_id").eq(
+def fetch_depth_data(client):
+    pms_rows = client.table("player_match_stats").select("player_id").eq(
         "team_id", BARCELONA_TEAM_ID
     ).execute().data
     player_ids = sorted({r["player_id"] for r in pms_rows})
 
-    players_rows = supabase.table("players").select(
+    players_rows = client.table("players").select(
         "id, name, nickname, primary_position"
     ).in_("id", player_ids).execute().data
 
     return build_depth_response(players_rows)
+
+
+def fetch_player_statuses_data(client):
+    return client.table("player_status").select(
+        "player_id, status, note, updated_by, updated_at"
+    ).execute().data
+
+
+@router.get("/performance")
+def get_player_performance(_user: AuthenticatedUser = Depends(get_current_user)):
+    return fetch_performance_data(get_db())
+
+
+@router.get("/fatigue-risk")
+def get_fatigue_risk(_user: AuthenticatedUser = Depends(get_current_user)):
+    return fetch_fatigue_data(get_db())
+
+
+@router.get("/depth")
+def get_squad_depth(_user: AuthenticatedUser = Depends(get_current_user)):
+    return fetch_depth_data(get_db())
 
 
 class PlayerStatusUpdate(BaseModel):
@@ -207,9 +220,7 @@ class PlayerStatusUpdate(BaseModel):
 
 @router.get("/status")
 def get_player_statuses(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
-    return client.table("player_status").select(
-        "player_id, status, note, updated_by, updated_at"
-    ).execute().data
+    return fetch_player_statuses_data(client)
 
 
 @router.post("/status")

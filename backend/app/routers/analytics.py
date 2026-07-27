@@ -36,13 +36,21 @@ def _latest_cache_rows(client, query_name):
     ).order("computed_at", desc=True).limit(1).execute().data
 
 
-@analytics_router.get("/rankings")
-def get_rankings(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+def fetch_rankings_data(client):
     rows = _latest_cache_rows(client, SEASON_RANKINGS)
     return build_analytics_response(rows, SEASON_RANKINGS)
 
 
-@analytics_router.get("/trends")
-def get_trends(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+def fetch_trends_data(client):
     rows = _latest_cache_rows(client, ROLLING_XG_TREND)
     return build_analytics_response(rows, ROLLING_XG_TREND)
+
+
+@analytics_router.get("/rankings")
+def get_rankings(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+    return fetch_rankings_data(client)
+
+
+@analytics_router.get("/trends")
+def get_trends(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+    return fetch_trends_data(client)

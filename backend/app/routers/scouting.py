@@ -36,18 +36,13 @@ def build_notes_response(notes, players_by_id, teams_by_id):
     return result
 
 
-@router.get("/notes")
-def get_scouting_notes(
-    player_id: Optional[int] = None,
-    user: AuthenticatedUser = Depends(get_current_user),
-    client=Depends(get_db),
-):
+def fetch_notes_data(client, player_id=None, author_id=None):
     query = client.table("scouting_notes").select(
         "id, player_id, author_id, note, rating, created_at"
     )
     # No player_id means "my notes" -- every note this caller has authored,
     # across all players, for the Scout's "My Scouting Notes" view.
-    query = query.eq("player_id", player_id) if player_id is not None else query.eq("author_id", user.id)
+    query = query.eq("player_id", player_id) if player_id is not None else query.eq("author_id", author_id)
     notes = query.order("created_at", desc=True).execute().data
 
     player_ids = list({n["player_id"] for n in notes})
@@ -73,6 +68,15 @@ def get_scouting_notes(
     teams_by_id = {t["id"]: t["name"] for t in teams_rows}
 
     return build_notes_response(notes, players_by_id, teams_by_id)
+
+
+@router.get("/notes")
+def get_scouting_notes(
+    player_id: Optional[int] = None,
+    user: AuthenticatedUser = Depends(get_current_user),
+    client=Depends(get_db),
+):
+    return fetch_notes_data(client, player_id=player_id, author_id=user.id)
 
 
 @router.post("/notes")

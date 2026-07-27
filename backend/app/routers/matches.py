@@ -186,24 +186,26 @@ def build_match_detail_response(match_row, team_names_by_id, stats_rows, players
     }
 
 
-@matches_router.get("/summary")
-def get_matches_summary(_user: AuthenticatedUser = Depends(get_current_user)):
-    supabase = get_db()
-
-    matches_rows = supabase.table("matches").select(
+def fetch_matches_summary_data(client):
+    matches_rows = client.table("matches").select(
         "id, date, home_team_id, away_team_id, home_score, away_score, stadium, match_week"
     ).execute().data
 
     team_ids = {m["home_team_id"] for m in matches_rows} | {m["away_team_id"] for m in matches_rows}
-    teams_rows = supabase.table("teams").select("id, name").in_("id", list(team_ids)).execute().data
+    teams_rows = client.table("teams").select("id, name").in_("id", list(team_ids)).execute().data
     team_names_by_id = {t["id"]: t["name"] for t in teams_rows}
 
     match_ids = [m["id"] for m in matches_rows]
-    team_stats_rows = supabase.table("team_match_stats").select(
+    team_stats_rows = client.table("team_match_stats").select(
         "match_id, team_id, possession_pct"
     ).eq("team_id", BARCELONA_TEAM_ID).in_("match_id", match_ids).execute().data
 
     return build_matches_response(matches_rows, team_stats_rows, team_names_by_id, BARCELONA_TEAM_ID)
+
+
+@matches_router.get("/summary")
+def get_matches_summary(_user: AuthenticatedUser = Depends(get_current_user)):
+    return fetch_matches_summary_data(get_db())
 
 
 @matches_router.get("/{match_id}/detail")
