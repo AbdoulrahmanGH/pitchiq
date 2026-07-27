@@ -4,6 +4,7 @@ import Avatar from './Avatar';
 import Skeleton from './Skeleton';
 import ShotMap from './ShotMap';
 import PassNetwork from './PassNetwork';
+import ProgressiveMap from './ProgressiveMap';
 import { getMatchDetail } from '../services/api';
 
 function formatDate(dateStr) {
@@ -182,7 +183,13 @@ export default function MatchModal({ matchId, open, onClose }) {
               </div>
               <PassNetwork matchId={matchId} homeTeam={detail.home_team} awayTeam={detail.away_team} />
             </div>
-{(detail.home_team.ppda != null || detail.away_team.ppda != null ||
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
+                Progressive Actions
+              </div>
+              <ProgressiveMap matchId={matchId} homeTeam={detail.home_team} awayTeam={detail.away_team} />
+            </div>
+            {(detail.home_team.ppda != null || detail.away_team.ppda != null ||
               detail.home_team.field_tilt_pct != null || detail.away_team.field_tilt_pct != null) && (
               <div style={{ marginBottom: 24 }}>
                 <TeamMetrics homeTeam={detail.home_team} awayTeam={detail.away_team} />

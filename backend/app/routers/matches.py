@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth import AuthenticatedUser, get_current_user
+from app.data.pipeline_v2 import _is_progressive
 from app.db import get_db
 from app.services.fatigue import get_at_risk_players
 
@@ -339,6 +340,61 @@ def get_pass_network(match_id: int, _user: AuthenticatedUser = Depends(get_curre
                      for p in players_rows}
 
     return build_pass_network_response(match_id, pass_rows, players_by_id)
+
+
+# --------------------------- progressive actions ---------------------------
+
+def build_progressive_actions_response(match_id, event_rows, players_by_id):
+    """event_rows: match_events Pass/Carry rows for this match. Applies
+    pipeline_v2._is_progressive -- the exact rule that computes
+    player_match_stats.progressive_passes/carries -- per event, with the
+    same inclusion semantics: progressive passes count whether or not they
+    completed (that is what the stored per-player stat counts, so this map
+    reconciles exactly with it). `completed` lets the display distinguish
+    an arrived ball from an attempt.
+    """
+    actions = []
+    for r in event_rows:
+        if r["event_type"] not in ("Pass", "Carry"):
+            continue
+        if r.get("x") is None or r.get("end_x") is None:
+            continue
+        if not _is_progressive((r["x"], r["y"]), (r["end_x"], r["end_y"])):
+            continue
+        meta = players_by_id.get(r["player_id"], {})
+        actions.append({
+            "player_id": r["player_id"],
+            "player_name": meta.get("nickname") or meta.get("name"),
+            "team_id": r["team_id"],
+            "event_type": r["event_type"],
+            "completed": (r.get("outcome") == "Complete"
+                          if r["event_type"] == "Pass" else True),
+            "minute": r["minute"],
+            "x": r["x"], "y": r["y"],
+            "end_x": r["end_x"], "end_y": r["end_y"],
+        })
+    actions.sort(key=lambda a: (a["minute"] if a["minute"] is not None else 0))
+    return {"match_id": match_id, "actions": actions}
+
+
+@matches_router.get("/{match_id}/progressive-actions")
+def get_progressive_actions(match_id: int, _user: AuthenticatedUser = Depends(get_current_user),
+                            client=Depends(get_db)):
+    event_rows = _fetch_all_pages(
+        client.table("match_events").select(
+            "match_id, player_id, team_id, event_type, outcome, minute, "
+            "x, y, end_x, end_y"
+        ).eq("match_id", match_id).in_("event_type", ["Pass", "Carry"]).order("id")
+    )
+
+    player_ids = {r["player_id"] for r in event_rows}
+    players_rows = client.table("players").select("id, name, nickname").in_(
+        "id", list(player_ids)
+    ).execute().data if player_ids else []
+    players_by_id = {p["id"]: {"name": p["name"], "nickname": p["nickname"]}
+                     for p in players_rows}
+
+    return build_progressive_actions_response(match_id, event_rows, players_by_id)
 
 
 def fetch_readiness_data(client):
