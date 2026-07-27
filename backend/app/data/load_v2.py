@@ -11,6 +11,7 @@ Load order matters because of foreign keys:
 
 import math
 
+import pandas as pd
 from supabase import create_client
 
 from app.config import SUPABASE_KEY, SUPABASE_URL
@@ -21,12 +22,19 @@ LOOKUP_TABLES = ("teams", "players", "matches")
 MATCH_SCOPED_TABLES = ("player_match_stats", "team_match_stats", "match_events")
 
 
+def _null_or_value(v):
+    # NaN from float columns and pd.NA from nullable-Int64 columns
+    # (match_events.recipient_id) both become JSON null. Int64 values
+    # themselves come out of to_dict() as ints, never "6606.0" floats.
+    if v is pd.NA:
+        return None
+    if isinstance(v, float) and math.isnan(v):
+        return None
+    return v
+
+
 def _clean(records):
-    return [
-        {k: (None if isinstance(v, float) and math.isnan(v) else v)
-         for k, v in r.items()}
-        for r in records
-    ]
+    return [{k: _null_or_value(v) for k, v in r.items()} for r in records]
 
 
 def _chunks(records, size=CHUNK_SIZE):

@@ -90,7 +90,11 @@ create table match_events (
   end_x real, end_y real,
   outcome text,
   xg real,
-  under_pressure boolean not null default false
+  under_pressure boolean not null default false,
+  -- added by the recipient_id migration (run manually): the receiving
+  -- player of a completed Pass, from StatsBomb's pass.recipient. Null for
+  -- incomplete passes and for every non-Pass event type.
+  recipient_id integer references players(id)
 );
 
 create table rules (

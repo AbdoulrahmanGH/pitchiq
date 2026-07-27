@@ -23,6 +23,15 @@ Metric definitions (confirmed against football-docs, see tests/test_transform.py
   whose possession_team is the pressing team.
 - Ratio metrics with a zero denominator are null, never 0; count metrics
   default to 0.
+
+match_events expected volume (full 38-match run, verified 2026-07-28):
+71,506 rows = 38,830 Pass + 31,704 Carry + 972 Shot. This is the CORRECT
+count since the Pass/Carry expansion (every Pass with recipient_id, every
+Carry with end coordinates -- previously only key passes and shots were
+stored, 1,673 rows total). A future run landing near ~1.7k again would be a
+REGRESSION to the old extraction, not a cleanup. 36,737 of the Pass rows
+carry a recipient_id (completed passes; incomplete ones have no recipient
+in StatsBomb).
 """
 
 import json
@@ -279,6 +288,18 @@ def _transform_match(match, events, lineups, teams, players,
             if pas.get("shot_assist") or pas.get("goal_assist"):
                 ps["key_passes"] += 1
                 ps["xa"] += shot_xg_by_id.get(pas.get("assisted_shot_id"), 0.0)
+            if pas.get("goal_assist"):
+                ps["assists"] += 1
+            if loc and _is_progressive(loc, pas["end_location"]):
+                ps["progressive_passes"] += 1
+            if loc and loc[0] <= PPDA_OPP_PASS_MAX_X:
+                ts["ppda_passes"] += 1
+            # Every Pass lands in match_events (not just key passes), with
+            # the receiver resolved from pass.recipient -- incomplete passes
+            # have no recipient in StatsBomb and stay null. Powers the pass
+            # network and (via the same _is_progressive rule, applied at
+            # query time) the progressive-actions map.
+            if loc:
                 match_events.append({
                     "match_id": match_id, "player_id": pid, "team_id": team_id,
                     "event_type": "Pass", "minute": e["minute"],
@@ -286,14 +307,9 @@ def _transform_match(match, events, lineups, teams, players,
                     "end_x": pas["end_location"][0], "end_y": pas["end_location"][1],
                     "outcome": pas.get("outcome", {}).get("name", "Complete"),
                     "xg": None,
+                    "recipient_id": pas.get("recipient", {}).get("id"),
                     "under_pressure": bool(e.get("under_pressure", False)),
                 })
-            if pas.get("goal_assist"):
-                ps["assists"] += 1
-            if loc and _is_progressive(loc, pas["end_location"]):
-                ps["progressive_passes"] += 1
-            if loc and loc[0] <= PPDA_OPP_PASS_MAX_X:
-                ts["ppda_passes"] += 1
 
         elif etype == "Shot":
             shot = e["shot"]
@@ -312,12 +328,25 @@ def _transform_match(match, events, lineups, teams, players,
                 "end_x": end[0], "end_y": end[1],
                 "outcome": shot.get("outcome", {}).get("name"),
                 "xg": xg,
+                "recipient_id": None,
                 "under_pressure": bool(e.get("under_pressure", False)),
             })
 
         elif etype == "Carry":
-            if loc and _is_progressive(loc, e["carry"]["end_location"]):
+            end = e["carry"]["end_location"]
+            if loc and _is_progressive(loc, end):
                 ps["progressive_carries"] += 1
+            if loc:
+                match_events.append({
+                    "match_id": match_id, "player_id": pid, "team_id": team_id,
+                    "event_type": "Carry", "minute": e["minute"],
+                    "x": loc[0], "y": loc[1],
+                    "end_x": end[0], "end_y": end[1],
+                    "outcome": None,
+                    "xg": None,
+                    "recipient_id": None,
+                    "under_pressure": bool(e.get("under_pressure", False)),
+                })
 
         elif etype == "Dribble":
             ps["dribbles_attempted"] += 1
@@ -411,13 +440,21 @@ def transform(matches, events_by_match, lineups_by_match):
                          lineups_by_match[match_id], teams, players,
                          player_stats, team_stats, match_events)
 
+    match_events_df = pd.DataFrame(match_events)
+    if not match_events_df.empty:
+        # Nullable Int64, not int64: recipient_id is null on every non-Pass
+        # row, and plain int64-with-NaN silently becomes float64 -- which
+        # Postgres then rejects ('invalid input syntax for type integer:
+        # "6606.0"') on load.
+        match_events_df["recipient_id"] = match_events_df["recipient_id"].astype("Int64")
+
     return {
         "teams": pd.DataFrame(sorted(teams.values(), key=lambda t: t["id"])),
         "players": pd.DataFrame(sorted(players.values(), key=lambda p: p["id"])),
         "matches": pd.DataFrame(match_rows),
         "player_match_stats": pd.DataFrame(player_stats),
         "team_match_stats": pd.DataFrame(team_stats),
-        "match_events": pd.DataFrame(match_events),
+        "match_events": match_events_df,
     }
 
 

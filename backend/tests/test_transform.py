@@ -25,6 +25,7 @@ football-docs documentation:
   Pressure (same period) whose possession_team is the pressing team.
 """
 
+import pandas as pd
 import pytest
 
 from app.data.pipeline_v2 import transform
@@ -411,10 +412,16 @@ def test_team_possession_and_tilt_match2(result):
 
 
 # ------------------------------- match_events -------------------------------
+# Since the Pass/Carry expansion, match_events stores EVERY Pass event (with
+# recipient_id from StatsBomb's pass.recipient) and EVERY Carry event (with
+# its end coordinates) -- not just key passes. Hand count for these fixtures:
+#   Match 1: 2 passes (Messi, Opp CB) + 2 carries (Suarez, Opp CB) + 2 shots = 6
+#   Match 2: 7 passes (5 Opp, 2 Suarez) + 0 carries + 0 shots = 7
+# Total: 13 rows.
 
 def test_match_events_rows(result):
     me = result["match_events"]
-    assert len(me) == 3
+    assert len(me) == 13
 
     goal = row(me, match_id=1, event_type="Shot", outcome="Goal")
     assert goal["player_id"] == 5246
@@ -430,10 +437,69 @@ def test_match_events_rows(result):
     off_t = row(me, match_id=1, event_type="Shot", outcome="Off T")
     assert off_t["xg"] == pytest.approx(0.2)
 
-    kp = row(me, match_id=1, event_type="Pass")
-    assert kp["player_id"] == 5503
+    kp = row(me, match_id=1, event_type="Pass", player_id=5503)
     assert kp["outcome"] == "Complete"
     assert kp["end_x"] == pytest.approx(85.0)
+
+
+def test_match_events_stores_every_pass_with_recipient_id(result):
+    me = result["match_events"]
+    passes = me[me["event_type"] == "Pass"]
+    # every Pass event in the fixtures, not just key passes
+    assert len(passes) == 9
+    assert len(passes[passes["match_id"] == 1]) == 2
+    assert len(passes[passes["match_id"] == 2]) == 7
+
+    # Messi -> Suarez: recipient resolved from pass.recipient
+    messi_pass = row(me, match_id=1, event_type="Pass", player_id=5503)
+    assert messi_pass["recipient_id"] == 5246
+
+    # recipient_id must stay an integer despite the nulls on carries/shots --
+    # plain int64-with-NaN becomes float64 and Postgres rejects "6606.0"
+    # for an integer column (the exact failure the first real load hit).
+    assert str(me["recipient_id"].dtype) == "Int64"
+
+    # a completed non-key pass is stored too, with its recipient
+    opp_pass = row(me, match_id=1, event_type="Pass", player_id=9001)
+    assert opp_pass["recipient_id"] == 9001
+    assert opp_pass["outcome"] == "Complete"
+    assert opp_pass["end_x"] == pytest.approx(35.0)
+
+
+def test_match_events_stores_every_carry_with_end_coordinates(result):
+    me = result["match_events"]
+    carries = me[me["event_type"] == "Carry"]
+    assert len(carries) == 2
+
+    suarez_carry = row(me, match_id=1, event_type="Carry", player_id=5246)
+    assert suarez_carry["x"] == pytest.approx(50.0)
+    assert suarez_carry["end_x"] == pytest.approx(85.0)
+    assert suarez_carry["end_y"] == pytest.approx(40.0)
+    # carries have no shot/pass semantics: no recipient, no xg
+    assert pd.isna(suarez_carry["recipient_id"])
+    assert suarez_carry["xg"] is None or pd.isna(suarez_carry["xg"])
+
+    opp_carry = row(me, match_id=1, event_type="Carry", player_id=9001)
+    assert opp_carry["end_x"] == pytest.approx(86.0)
+
+
+def test_match_events_incomplete_pass_keeps_outcome_and_null_recipient():
+    events = [
+        starting_xi(1, BARCA, [(MESSI, "Right Wing")]),
+        starting_xi(2, OPP, [(OPP_CB, "Center Back")]),
+        ev(3, 30, "Pass", BARCA, "00:10:00.000", 10, 0, player=MESSI,
+           location=[50.0, 40.0], possession=2,
+           **{"pass": {"length": 20.0, "angle": 0.0,
+                       "height": {"id": 1, "name": "Ground Pass"},
+                       "end_location": [70.0, 40.0],
+                       "outcome": {"id": 9, "name": "Incomplete"}}}),
+    ]
+    result = transform([MATCH_1], {1: events}, {1: LINEUPS_1})
+    me = result["match_events"]
+
+    p = row(me, match_id=1, event_type="Pass")
+    assert p["outcome"] == "Incomplete"
+    assert pd.isna(p["recipient_id"])
 
 
 # --------------------- regression: key pass that missed ---------------------

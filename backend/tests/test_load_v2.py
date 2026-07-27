@@ -66,6 +66,21 @@ def test_upsert_table_converts_nan_to_none():
     assert records[0]["country"] is None
 
 
+def test_upsert_table_converts_nullable_int_na_to_none_and_keeps_ints():
+    # match_events.recipient_id is a nullable Int64 column: nulls must land
+    # as JSON null (not pd.NA, which isn't serializable), and present values
+    # must stay integers (not "6606.0", which Postgres rejects).
+    client = FakeClient()
+    df = pd.DataFrame({"id": [1, 2], "recipient_id": pd.array([6606, None], dtype="Int64")})
+
+    upsert_table(client, "match_events", df)
+
+    _, _, records, _ = client.calls[0]
+    assert records[0]["recipient_id"] == 6606
+    assert not isinstance(records[0]["recipient_id"], float)
+    assert records[1]["recipient_id"] is None
+
+
 def test_upsert_table_chunks_large_frames():
     client = FakeClient()
     df = pd.DataFrame([{"id": i} for i in range(CHUNK_SIZE + 1)])
