@@ -1,5 +1,6 @@
 import Modal, { ModalCloseButton } from './Modal';
 import Avatar from './Avatar';
+import PlayerRadar from './PlayerRadar';
 import ScoutingNotes from './ScoutingNotes';
 import { POS_COLORS } from '../constants';
 
@@ -63,6 +64,9 @@ export default function PlayerModal({ player, open, onClose }) {
           <StatTile label="Tackles"             value={player.total_tackles} />
           <StatTile label="Pressures"           value={player.total_pressures} />
           <StatTile label="Pressure Regains"    value={player.total_pressure_regains} color="var(--green)" />
+        </div>
+        <div style={{ marginTop: 18 }}>
+          <PlayerRadar playerId={player.player_id} />
         </div>
       </div>
 

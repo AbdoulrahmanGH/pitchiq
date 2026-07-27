@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.auth import AuthenticatedUser, get_current_user, require_role
@@ -191,6 +191,105 @@ def fetch_depth_data(client):
     return build_depth_response(players_rows)
 
 
+# ------------------------------ radar chart ------------------------------
+
+# Comparison-pool floor for percentile ranking: a 20-minute cameo's 90-a-game
+# per-90 rates are real but shouldn't distort every established player's
+# percentiles. One full match is the most this floor can be: the dataset is
+# Barcelona's 38 matches, so an opponent player faces us at most twice
+# (~180 minutes) -- any higher floor empties the pool down to just our own
+# squad and collapses every percentile toward 50. The target player is
+# always ranked, floor or not.
+RADAR_MIN_MINUTES = 90
+
+# (response key, display label, player_match_stats column). Percentiles are
+# computed here in Python against players sharing the target's exact
+# primary_position across the full dataset -- never estimated by an LLM.
+RADAR_METRICS = (
+    ("goals_per90", "Goals", "goals"),
+    ("xg_per90", "xG", "xg"),
+    ("key_passes_per90", "Key Passes", "key_passes"),
+    ("progressive_passes_per90", "Prog. Passes", "progressive_passes"),
+    ("progressive_carries_per90", "Prog. Carries", "progressive_carries"),
+    ("pressures_per90", "Pressures", "pressures"),
+)
+
+
+def percentile_rank(value, values):
+    """Percentile rank with ties: 100 * (below + 0.5 * at) / n. `values` is
+    the full comparison pool including the target's own value."""
+    n = len(values)
+    below = sum(1 for v in values if v < value)
+    at = sum(1 for v in values if v == value)
+    return 100.0 * (below + 0.5 * at) / n
+
+
+def build_radar_response(player_id, stats_rows, players_by_id):
+    """stats_rows: player_match_stats rows (full dataset, both teams).
+    players_by_id: {player_id: {"name", "nickname", "primary_position"}}.
+
+    Returns None when the player is unknown, has no primary_position to
+    define a peer group, or never played a minute (per-90 undefined).
+    """
+    target_meta = players_by_id.get(player_id)
+    if not target_meta or not target_meta.get("primary_position"):
+        return None
+    position = target_meta["primary_position"]
+
+    totals = {}
+    for row in stats_rows:
+        pid = row["player_id"]
+        t = totals.setdefault(pid, {"minutes": 0, **{col: 0.0 for _k, _l, col in RADAR_METRICS}})
+        t["minutes"] += row["minutes_played"] or 0
+        for _key, _label, col in RADAR_METRICS:
+            t[col] += row[col] or 0
+
+    target = totals.get(player_id)
+    if not target or target["minutes"] <= 0:
+        return None
+
+    def rates(t):
+        return {col: t[col] / t["minutes"] * 90.0 for _k, _l, col in RADAR_METRICS}
+
+    pool = {
+        pid: rates(t) for pid, t in totals.items()
+        if (players_by_id.get(pid, {}).get("primary_position") == position
+            and t["minutes"] >= RADAR_MIN_MINUTES and t["minutes"] > 0)
+    }
+    pool[player_id] = rates(target)
+
+    metrics = []
+    for key, label, col in RADAR_METRICS:
+        value = pool[player_id][col]
+        metrics.append({
+            "key": key,
+            "label": label,
+            "value": round(value, 2),
+            "percentile": round(percentile_rank(value, [r[col] for r in pool.values()]), 1),
+        })
+
+    return {
+        "player_id": player_id,
+        "name": target_meta.get("name"),
+        "primary_position": position,
+        "minutes": target["minutes"],
+        "pool_size": len(pool),
+        "metrics": metrics,
+    }
+
+
+def fetch_radar_data(client, player_id):
+    stats_rows = client.table("player_match_stats").select(
+        "player_id, minutes_played, goals, xg, key_passes, "
+        "progressive_passes, progressive_carries, pressures"
+    ).execute().data
+    players_rows = client.table("players").select(
+        "id, name, nickname, primary_position"
+    ).execute().data
+    players_by_id = {p["id"]: p for p in players_rows}
+    return build_radar_response(player_id, stats_rows, players_by_id)
+
+
 def fetch_player_statuses_data(client):
     """Every squad player, not just the ones with an explicit player_status
     row -- a player nobody has ever flagged is available by default (the
@@ -234,6 +333,16 @@ def get_fatigue_risk(_user: AuthenticatedUser = Depends(get_current_user), clien
 @router.get("/depth")
 def get_squad_depth(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
     return fetch_depth_data(client)
+
+
+@router.get("/{player_id}/radar")
+def get_player_radar(player_id: int, _user: AuthenticatedUser = Depends(get_current_user),
+                     client=Depends(get_db)):
+    radar = fetch_radar_data(client, player_id)
+    if radar is None:
+        raise HTTPException(status_code=404,
+                            detail="No radar data for this player")
+    return radar
 
 
 class PlayerStatusUpdate(BaseModel):

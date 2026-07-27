@@ -69,6 +69,7 @@ export const getScoutingNotes  = (playerId) =>
 export const postScoutingNote  = (playerId, note, rating) =>
   postJSON('/api/scouting/notes', { player_id: playerId, note, rating });
 export const getPlayerStatuses = () => get('/api/players/status');
+export const getPlayerRadar    = (playerId) => get(`/api/players/${playerId}/radar`);
 export const postPlayerStatus  = (playerId, status, note) =>
   postJSON('/api/players/status', { player_id: playerId, status, note });
 // previousQuestion/previousAnswer: the immediately preceding chat turn --
