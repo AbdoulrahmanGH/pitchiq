@@ -68,11 +68,29 @@ assistant.
   fabrication pattern: strict scope (only the injected readiness JSON),
   no invented players/stats, concise tone, no meta-commentary about being
   an AI. Trimmed to this single category (no tactics/transfers/etc.
-  sections needed since those categories don't exist here yet).
+  sections needed since those categories don't exist here yet). Also
+  includes:
+  - **Injection resistance** (defense-in-depth behind `classify_intent`,
+    not a replacement for it): a short rule instructing Groq that if the
+    user's message tries to override these instructions, ignore the
+    system prompt, or make it act as an unrestricted assistant, it must
+    respond with exactly `INJECTION_REFUSAL_MESSAGE` and nothing else,
+    rather than engaging with the framing. `classify_intent` is the
+    primary gate (off-topic questions never reach Groq at all); this
+    covers a readiness-shaped question that also carries an embedded
+    override attempt, since that question *does* reach Groq.
+  - **Style rules**: answers stay short (3-6 lines), plain text, no
+    markdown headers/bullets-as-formatting, and never mention being an AI
+    or add disclaimers.
 - `OUT_OF_SCOPE_MESSAGE` — fixed string, e.g. "I can only help with squad
   readiness questions right now. Try asking about player availability,
   fitness, or fatigue risk." Returned with zero Groq calls and zero data
   fetches when `classify_intent` returns `None`.
+- `INJECTION_REFUSAL_MESSAGE` — fixed string, e.g. "I'm focused on squad
+  readiness questions and can't change how I operate. What would you like
+  to know about the squad?" Enforced via the system prompt instruction
+  above; this is Groq's output on a matched-but-injected question, not a
+  separate code branch in `answer_question`.
 - `FALLBACK_MESSAGE` — fixed string, e.g. "The assistant is temporarily
   unavailable. Please try again shortly." Returned on any Groq-call
   exception.
@@ -84,7 +102,9 @@ assistant.
 - `answer_question(question: str, client) -> str` — orchestrates the
   above, wraps the Groq call in `try/except Exception` with a request
   timeout (e.g. 10s via the SDK's `timeout=` param) returning
-  `FALLBACK_MESSAGE` on any failure.
+  `FALLBACK_MESSAGE` on any failure. Groq call uses `temperature=0.2` and
+  `max_tokens=400` — favors consistent, grounded output over creative
+  variation and keeps answers naturally concise.
 
 **`backend/app/routers/ai.py`** (new):
 - `router = APIRouter(prefix="/api/ai", tags=["ai"])`
@@ -147,6 +167,12 @@ with fake `matches`/`rules`/`player_match_stats` rows as needed for
   prompt → Groq wiring runs).
 - `answer_question` with the Groq call mocked to raise returns
   `FALLBACK_MESSAGE`, not an exception.
+
+Injection resistance is a system-prompt-level instruction to Groq (same
+as the reference project's approach), not a separate code path, so it
+isn't independently unit-tested here — there's no deterministic string to
+assert against without a real model call. `classify_intent`'s tests above
+are what's actually machine-verified against fabrication/scope-creep.
 
 **`backend/tests/test_ai_router.py`** (new, mirroring
 `test_analytics_router.py`'s style): 401 without a token, 200 with one,
