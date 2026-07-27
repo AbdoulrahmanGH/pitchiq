@@ -8,13 +8,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.auth import AuthenticatedUser
 from app.services.ai_service import (
+    CATEGORY_KEYWORDS,
     FALLBACK_MESSAGE,
     OUT_OF_SCOPE_MESSAGE,
+    ROLE_ALLOWED_CATEGORIES,
     answer_question,
     classify_intent,
     resolve_player_names,
 )
+
+ANALYST_USER = AuthenticatedUser(id="user-1", email="analyst@example.com", role="analyst")
 
 
 @pytest.mark.parametrize("question,expected_category", [
@@ -103,7 +108,7 @@ def test_resolve_player_names_finds_two_distinct_matches_for_comparison():
 def test_out_of_scope_question_returns_fixed_message_without_calling_groq_or_readiness():
     with patch("app.services.ai_service.fetch_readiness_data") as mock_fetch, \
          patch("app.services.ai_service.get_groq_client") as mock_get_client:
-        result = answer_question("What's the weather like today?", client=MagicMock())
+        result = answer_question("What's the weather like today?", MagicMock(), ANALYST_USER)
 
     assert result == OUT_OF_SCOPE_MESSAGE
     mock_fetch.assert_not_called()
@@ -120,7 +125,7 @@ def test_readiness_question_summarizes_real_fetched_data_via_groq():
 
     with patch("app.services.ai_service.fetch_readiness_data", return_value=fake_readiness_data) as mock_fetch, \
          patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
-        result = answer_question("How is squad readiness looking?", client=MagicMock())
+        result = answer_question("How is squad readiness looking?", MagicMock(), ANALYST_USER)
 
     assert result == "Squad readiness is 82/100."
     mock_fetch.assert_called_once()
@@ -137,6 +142,50 @@ def test_groq_failure_returns_fallback_message_not_an_exception():
 
     with patch("app.services.ai_service.fetch_readiness_data", return_value={}), \
          patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
-        result = answer_question("How is squad readiness looking?", client=MagicMock())
+        result = answer_question("How is squad readiness looking?", MagicMock(), ANALYST_USER)
 
     assert result == FALLBACK_MESSAGE
+
+
+# ----------------------------------- role gating -----------------------------------
+
+def test_role_allowed_categories_matches_the_spec():
+    assert ROLE_ALLOWED_CATEGORIES["analyst"] == set(CATEGORY_KEYWORDS.keys())
+    assert ROLE_ALLOWED_CATEGORIES["coach"] == {
+        "team_readiness", "player_fatigue", "squad_depth",
+        "availability", "player_performance", "match_summary",
+    }
+    assert ROLE_ALLOWED_CATEGORIES["scout"] == {
+        "player_performance", "player_comparison", "season_rankings",
+        "player_trend", "match_summary", "scouting_notes",
+    }
+
+
+@pytest.mark.parametrize("role,question,fetch_patch_target", [
+    ("coach", "Who tops the season rankings?", "app.services.ai_service.fetch_readiness_data"),
+    ("scout", "Is the squad ready for Saturday?", "app.services.ai_service.fetch_readiness_data"),
+])
+def test_role_gating_blocks_disallowed_category_with_generic_message(role, question, fetch_patch_target):
+    user = AuthenticatedUser(id="user-1", email="x@example.com", role=role)
+    with patch(fetch_patch_target) as mock_fetch, \
+         patch("app.services.ai_service.get_groq_client") as mock_get_client:
+        result = answer_question(question, MagicMock(), user)
+
+    assert result == OUT_OF_SCOPE_MESSAGE
+    mock_fetch.assert_not_called()
+    mock_get_client.assert_not_called()
+
+
+def test_role_gating_allows_coach_to_ask_team_readiness():
+    fake_readiness_data = {"readiness_score": 90}
+    mock_groq_response = MagicMock()
+    mock_groq_response.choices[0].message.content = "Readiness is 90/100."
+    mock_groq_client = MagicMock()
+    mock_groq_client.chat.completions.create.return_value = mock_groq_response
+    coach_user = AuthenticatedUser(id="user-2", email="coach@example.com", role="coach")
+
+    with patch("app.services.ai_service.fetch_readiness_data", return_value=fake_readiness_data), \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+        result = answer_question("Is the squad ready for Saturday?", MagicMock(), coach_user)
+
+    assert result == "Readiness is 90/100."

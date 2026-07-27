@@ -142,9 +142,25 @@ def get_groq_client() -> OpenAI:
     return OpenAI(api_key=GROQ_API_KEY, base_url=GROQ_BASE_URL, timeout=GROQ_TIMEOUT_SECONDS)
 
 
-def answer_question(question: str, client) -> str:
+ROLE_ALLOWED_CATEGORIES = {
+    "analyst": set(CATEGORY_KEYWORDS.keys()),
+    "coach": {
+        "team_readiness", "player_fatigue", "squad_depth",
+        "availability", "player_performance", "match_summary",
+    },
+    "scout": {
+        "player_performance", "player_comparison", "season_rankings",
+        "player_trend", "match_summary", "scouting_notes",
+    },
+}
+
+
+def answer_question(question: str, client, user) -> str:
     category = classify_intent(question)
     if category is None:
+        return OUT_OF_SCOPE_MESSAGE
+
+    if category not in ROLE_ALLOWED_CATEGORIES.get(user.role, set()):
         return OUT_OF_SCOPE_MESSAGE
 
     readiness_data = fetch_readiness_data(client)

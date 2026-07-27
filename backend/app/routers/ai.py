@@ -21,7 +21,7 @@ class AskRequest(BaseModel):
 @router.post("/ask")
 def ask(
     body: AskRequest,
-    _user: AuthenticatedUser = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
     client=Depends(get_db),
 ):
-    return {"answer": answer_question(body.question, client)}
+    return {"answer": answer_question(body.question, client, user)}
