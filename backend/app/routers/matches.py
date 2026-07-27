@@ -244,12 +244,15 @@ def get_match_detail(match_id: int, _user: AuthenticatedUser = Depends(get_curre
                                        shot_rows, team_stats_rows)
 
 
-@team_router.get("/readiness")
-def get_team_readiness(_user: AuthenticatedUser = Depends(get_current_user)):
-    supabase = get_db()
-    at_risk = get_at_risk_players(supabase, BARCELONA_TEAM_ID)
+def fetch_readiness_data(client):
+    """Runs the full /api/team/readiness computation against real tables.
+    Used by the route below and, in-process, by app.services.ai_service
+    for the AI assistant's readiness answers -- one implementation, not
+    two copies of the player_status join logic.
+    """
+    at_risk = get_at_risk_players(client, BARCELONA_TEAM_ID)
 
-    status_rows = supabase.table("player_status").select(
+    status_rows = client.table("player_status").select(
         "player_id, status, note, updated_by, updated_at, players(name, nickname)"
     ).execute().data
     player_statuses = []
@@ -258,6 +261,11 @@ def get_team_readiness(_user: AuthenticatedUser = Depends(get_current_user)):
         player_statuses.append({**r, "name": joined.get("name"), "nickname": joined.get("nickname")})
 
     return build_readiness_response(at_risk, player_statuses)
+
+
+@team_router.get("/readiness")
+def get_team_readiness(_user: AuthenticatedUser = Depends(get_current_user)):
+    return fetch_readiness_data(get_db())
 
 
 @team_router.get("/info")

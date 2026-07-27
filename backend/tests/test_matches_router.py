@@ -7,13 +7,17 @@ Also covers keeping the rest of the response shape close to v1's
 our own team), now computed from schema_v2's team-agnostic match rows.
 """
 
+from unittest.mock import patch
+
 from app.routers.matches import (
     BARCELONA_TEAM_ID,
     build_match_detail_response,
     build_matches_response,
     build_readiness_response,
     build_team_info_response,
+    fetch_readiness_data,
 )
+from tests.fakes_supabase import FakeClient, FakeUser
 
 TEAM_NAMES = {215: "Athletic Club", 217: "Barcelona", 223: "Malaga"}
 
@@ -158,6 +162,25 @@ def test_readiness_with_no_player_statuses_matches_fatigue_only_behavior():
     assert result["readiness_score"] == 90
     assert result["unavailable_players"] == []
     assert result["doubtful_players"] == []
+
+
+def test_fetch_readiness_data_joins_player_status_names_and_scores_it():
+    fake = FakeClient(
+        user=FakeUser(id="u1", email="analyst@example.com"),
+        player_statuses=[
+            {"player_id": 5503, "status": "doubtful", "note": None,
+             "updated_by": "coach-1", "updated_at": "2026-07-26T00:00:00Z",
+             "players": {"name": "Lionel Messi", "nickname": "Messi"}},
+        ],
+    )
+
+    with patch("app.routers.matches.get_at_risk_players", return_value=[]) as mock_at_risk:
+        result = fetch_readiness_data(fake)
+
+    mock_at_risk.assert_called_once_with(fake, BARCELONA_TEAM_ID)
+    assert result["readiness_score"] == 93  # 100 - 7 (doubtful)
+    assert result["doubtful_players"][0]["name"] == "Lionel Messi"
+    assert result["doubtful_players"][0]["nickname"] == "Messi"
 
 
 # --------------------------- bug: hardcoded team/league name ---------------------------
