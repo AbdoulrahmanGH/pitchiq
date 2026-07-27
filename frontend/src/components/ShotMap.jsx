@@ -35,7 +35,7 @@ function radiusFor(xg) {
   return 1.2 + 2.4 * Math.sqrt(Math.max(0, xg || 0));
 }
 
-function PitchMarkings() {
+export function PitchMarkings() {
   const line = { fill: 'none', stroke: 'rgba(255,255,255,0.14)', strokeWidth: 0.35 };
   return (
     <g>

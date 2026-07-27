@@ -59,6 +59,7 @@ export const getMatchesSummary     = () => get('/api/matches/summary');
 export const getTeamReadiness      = () => get('/api/team/readiness');
 export const getTeamInfo           = () => get('/api/team/info');
 export const getMatchDetail        = (matchId) => get(`/api/matches/${matchId}/detail`);
+export const getPassNetwork        = (matchId) => get(`/api/matches/${matchId}/pass-network`);
 export const getPipelineStatus      = () => get('/api/pipeline/status');
 export const triggerPipelineRefresh = () => post('/api/pipeline/refresh');
 

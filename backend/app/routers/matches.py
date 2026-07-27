@@ -246,6 +246,101 @@ def get_match_detail(match_id: int, _user: AuthenticatedUser = Depends(get_curre
                                        shot_rows, team_stats_rows)
 
 
+# ------------------------------ pass network ------------------------------
+
+# Minimum completed passes between a pair before an edge is drawn -- matches
+# the reference pass-network example's own 3+ cutoff. Below it a pairing is
+# noise, not a combination.
+PASS_EDGE_MIN = 3
+
+# PostgREST caps a single response at 1000 rows. A match has ~1000-1900
+# Pass/Carry events since the match_events expansion, so event queries MUST
+# page or they silently truncate -- the pass-network/progressive endpoints
+# initially lost ~60% of the Clasico's rows exactly this way.
+_PAGE_SIZE = 1000
+
+
+def _fetch_all_pages(query):
+    """query: a PostgREST select builder, fully filtered. Returns every row,
+    paging by _PAGE_SIZE until a short page arrives."""
+    rows, page = [], 0
+    while True:
+        chunk = query.range(page * _PAGE_SIZE, page * _PAGE_SIZE + _PAGE_SIZE - 1).execute().data
+        rows.extend(chunk)
+        if len(chunk) < _PAGE_SIZE:
+            return rows
+        page += 1
+
+
+def build_pass_network_response(match_id, pass_rows, players_by_id):
+    """pass_rows: match_events rows for this match with event_type='Pass',
+    outcome='Complete' and recipient_id set -- only real completed passes
+    between resolved players. players_by_id: {player_id: {"name", "nickname"}}.
+
+    Per team: a node per player who made or received a completed pass,
+    positioned at the average of their involvements (own pass origins +
+    received-pass end points); an undirected edge per pair with >=
+    PASS_EDGE_MIN completed passes between them (both directions summed).
+    """
+    by_team = {}
+    for r in pass_rows:
+        if r.get("recipient_id") is None or r.get("outcome") != "Complete":
+            continue
+        t = by_team.setdefault(r["team_id"], {"positions": {}, "passes": {}, "pairs": {}})
+        t["positions"].setdefault(r["player_id"], []).append((r["x"], r["y"]))
+        t["positions"].setdefault(r["recipient_id"], []).append((r["end_x"], r["end_y"]))
+        t["passes"][r["player_id"]] = t["passes"].get(r["player_id"], 0) + 1
+        pair = tuple(sorted((r["player_id"], r["recipient_id"])))
+        t["pairs"][pair] = t["pairs"].get(pair, 0) + 1
+
+    teams = []
+    for team_id, t in by_team.items():
+        nodes = []
+        for pid, points in t["positions"].items():
+            meta = players_by_id.get(pid, {})
+            nodes.append({
+                "player_id": pid,
+                "name": meta.get("name"),
+                "nickname": meta.get("nickname"),
+                "x": sum(p[0] for p in points) / len(points),
+                "y": sum(p[1] for p in points) / len(points),
+                "passes": t["passes"].get(pid, 0),
+            })
+        nodes.sort(key=lambda n: n["passes"], reverse=True)
+        edges = [
+            {"a": a, "b": b, "count": count}
+            for (a, b), count in sorted(t["pairs"].items(), key=lambda kv: -kv[1])
+            if count >= PASS_EDGE_MIN
+        ]
+        teams.append({"team_id": team_id, "nodes": nodes, "edges": edges})
+
+    teams.sort(key=lambda t: t["team_id"])
+    return {"match_id": match_id, "teams": teams}
+
+
+@matches_router.get("/{match_id}/pass-network")
+def get_pass_network(match_id: int, _user: AuthenticatedUser = Depends(get_current_user),
+                     client=Depends(get_db)):
+    pass_rows = _fetch_all_pages(
+        client.table("match_events").select(
+            "match_id, player_id, recipient_id, team_id, event_type, outcome, "
+            "x, y, end_x, end_y, minute"
+        ).eq("match_id", match_id).eq("event_type", "Pass").eq(
+            "outcome", "Complete"
+        ).not_.is_("recipient_id", "null").order("id")
+    )
+
+    player_ids = ({r["player_id"] for r in pass_rows}
+                  | {r["recipient_id"] for r in pass_rows})
+    players_rows = client.table("players").select("id, name, nickname").in_(
+        "id", list(player_ids)
+    ).execute().data if player_ids else []
+    players_by_id = {p["id"]: {"name": p["name"], "nickname": p["nickname"]}
+                     for p in players_rows}
+
+    return build_pass_network_response(match_id, pass_rows, players_by_id)
+
+
 def fetch_readiness_data(client):
     """Runs the full /api/team/readiness computation against real tables.
     Used by the route below and, in-process, by app.services.ai_service
