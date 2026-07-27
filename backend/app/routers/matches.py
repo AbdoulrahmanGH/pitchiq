@@ -270,23 +270,29 @@ def get_team_readiness(_user: AuthenticatedUser = Depends(get_current_user)):
     return fetch_readiness_data(get_db())
 
 
-@team_router.get("/info")
-def get_team_info(_user: AuthenticatedUser = Depends(get_current_user)):
-    supabase = get_db()
-
-    team_rows = supabase.table("teams").select("id, name").eq(
+def fetch_team_info_data(client):
+    """Runs the full /api/team/info computation against real tables. Used
+    by the route below and, in-process, by app.services.ai_service for the
+    AI assistant's team_season_stats answers.
+    """
+    team_rows = client.table("teams").select("id, name").eq(
         "id", BARCELONA_TEAM_ID
     ).execute().data
     team_name = team_rows[0]["name"] if team_rows else None
 
-    match_rows = supabase.table("matches").select(
+    match_rows = client.table("matches").select(
         "competition_name, season_name"
     ).limit(1).execute().data
     competition_name = match_rows[0]["competition_name"] if match_rows else None
     season_name = match_rows[0]["season_name"] if match_rows else None
 
-    team_stats_rows = supabase.table("team_match_stats").select(
+    team_stats_rows = client.table("team_match_stats").select(
         "ppda, field_tilt_pct"
     ).eq("team_id", BARCELONA_TEAM_ID).execute().data
 
     return build_team_info_response(team_name, competition_name, season_name, team_stats_rows)
+
+
+@team_router.get("/info")
+def get_team_info(_user: AuthenticatedUser = Depends(get_current_user), client=Depends(get_db)):
+    return fetch_team_info_data(client)

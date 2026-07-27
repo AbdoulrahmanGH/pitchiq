@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from app.data.bigquery_analytics_v2 import ROLLING_XG_TREND, SEASON_RANKINGS
 from app.db import get_db
 from app.main import app
-from app.routers.analytics import build_analytics_response
+from app.routers.analytics import build_analytics_response, fetch_rankings_data
 from tests.fakes_supabase import FakeClient, FakeUser
 
 client = TestClient(app)
@@ -88,7 +88,29 @@ def test_rankings_returns_latest_cached_payload():
     body = response.json()
     assert body["query_name"] == SEASON_RANKINGS
     assert body["data"] == [{"player_id": 5246, "season_goals": 40, "goals_rank": 1,
-                             "season_xg": 27.65, "xg_rank": 1}]
+                             "season_xg": 27.65, "xg_rank": 1, "goals_minus_xg": 12.35}]
+
+
+def test_fetch_rankings_data_computes_goals_minus_xg_per_player():
+    fake = FakeClient(
+        user=FAKE_USER,
+        roles_by_user_id={"user-1": "analyst"},
+        analytics_cache_rows={
+            SEASON_RANKINGS: [
+                {"computed_at": "2026-07-26T12:00:00Z",
+                 "payload": [
+                     {"player_id": 1, "season_goals": 30, "season_xg": 18.0, "goals_rank": 1, "xg_rank": 2},
+                     {"player_id": 2, "season_goals": 20, "season_xg": 25.0, "goals_rank": 2, "xg_rank": 1},
+                 ]},
+            ],
+        },
+    )
+
+    result = fetch_rankings_data(fake)
+
+    by_id = {row["player_id"]: row for row in result["data"]}
+    assert by_id[1]["goals_minus_xg"] == 12.0  # outperforming xG
+    assert by_id[2]["goals_minus_xg"] == -5.0  # underperforming xG
 
 
 def test_trends_returns_latest_cached_payload():

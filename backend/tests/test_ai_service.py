@@ -15,6 +15,7 @@ from app.services.ai_service import (
     OUT_OF_SCOPE_MESSAGE,
     PLAYER_NOT_FOUND_MESSAGE,
     ROLE_ALLOWED_CATEGORIES,
+    _classify_intent_by_keywords,
     answer_question,
     classify_intent,
     resolve_player_names,
@@ -45,9 +46,15 @@ ANALYST_USER = AuthenticatedUser(id="user-1", email="analyst@example.com", role=
     ("What was the result of our last match?", "match_summary"),
     ("What are my scouting notes on Messi?", "scouting_notes"),
     ("Show me my notes about Suarez", "scouting_notes"),
+    ("What's our PPDA like this season?", "team_season_stats"),
+    ("How's our field tilt trending?", "team_season_stats"),
 ])
-def test_classify_intent_matches_expected_category(question, expected_category):
-    assert classify_intent(question) == expected_category
+def test_keyword_classifier_matches_expected_category(question, expected_category):
+    # These exercise _classify_intent_by_keywords directly -- the fallback
+    # path used only when the LLM classifier call fails. classify_intent
+    # itself always tries the LLM first (see the classify_intent tests
+    # below), so testing it directly here would make a real network call.
+    assert _classify_intent_by_keywords(question) == expected_category
 
 
 @pytest.mark.parametrize("question", [
@@ -57,12 +64,53 @@ def test_classify_intent_matches_expected_category(question, expected_category):
     "Who won the league last season?",
     "Have we already played Real Madrid this season?",
 ])
-def test_classify_intent_returns_none_for_out_of_scope_questions(question):
+def test_keyword_classifier_returns_none_for_out_of_scope_questions(question):
     # The last two cases are regression tests for the whole-word matching
     # fix: "formation" must not match the "form" keyword (player_trend),
     # and "already" must not match the "ready" keyword (team_readiness) --
     # both would false-positive under naive substring matching.
-    assert classify_intent(question) is None
+    assert _classify_intent_by_keywords(question) is None
+
+
+# ----------------------------- classify_intent (LLM + fallback) -----------------------------
+
+def _mock_groq_with_content(content):
+    mock_response = MagicMock()
+    mock_response.choices[0].message.content = content
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = mock_response
+    return mock_client
+
+
+def test_classify_intent_trusts_the_llm_even_where_keywords_would_miss():
+    # "season average xg" contains none of player_performance's keywords --
+    # a real failure found in live testing that motivated the LLM
+    # classifier in the first place.
+    mock_client = _mock_groq_with_content("player_performance")
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        assert classify_intent("What's Messi's season average xg?") == "player_performance"
+
+
+def test_classify_intent_trusts_a_confident_none_without_falling_back():
+    # Even though the keyword matcher would classify this as team_readiness,
+    # a confident "none" from the LLM must be trusted as-is, not second-
+    # guessed via the keyword fallback.
+    mock_client = _mock_groq_with_content("none")
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        assert classify_intent("Is the squad ready for Saturday?") is None
+
+
+def test_classify_intent_falls_back_to_keywords_when_llm_call_raises():
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = TimeoutError("Groq timed out")
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        assert classify_intent("Is the squad ready for Saturday?") == "team_readiness"
+
+
+def test_classify_intent_falls_back_to_keywords_when_llm_returns_invalid_category():
+    mock_client = _mock_groq_with_content("definitely not a real category")
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        assert classify_intent("Is the squad ready for Saturday?") == "team_readiness"
 
 
 # ----------------------------- resolve_player_names -----------------------------
@@ -109,6 +157,17 @@ def test_resolve_player_names_matches_accented_name_typed_without_accent():
     assert {p["id"] for p in result} == {1, 5}
 
 
+def test_resolve_player_names_matches_accented_name_typed_with_its_own_accent():
+    # The other direction of the accent-folding fix: a question that types
+    # the name correctly (with its accent) must still resolve, proving the
+    # fold is applied symmetrically to both sides, not just the ASCII case.
+    players = [{"id": 5, "name": "Luis Alberto Suárez Díaz"}]
+
+    result = resolve_player_names("What are Suárez's stats?", players)
+
+    assert {p["id"] for p in result} == {5}
+
+
 def test_resolve_player_names_finds_two_distinct_matches_for_comparison():
     result = resolve_player_names("Compare Messi and Busquets this season", SAMPLE_PLAYERS)
 
@@ -117,14 +176,18 @@ def test_resolve_player_names_finds_two_distinct_matches_for_comparison():
 
 # --------------------------------- answer_question ---------------------------------
 
-def test_out_of_scope_question_returns_fixed_message_without_calling_groq_or_readiness():
+def test_out_of_scope_question_returns_fixed_message_without_fetching_or_answering():
+    # classify_intent always makes one Groq call (classification) -- but a
+    # confident "none" must short-circuit before any data fetch or second
+    # (answer-generation) Groq call.
+    mock_groq_client = _mock_groq_with_content("none")
     with patch("app.services.ai_service.fetch_readiness_data") as mock_fetch, \
-         patch("app.services.ai_service.get_groq_client") as mock_get_client:
+         patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
         result = answer_question("What's the weather like today?", MagicMock(), ANALYST_USER)
 
     assert result == OUT_OF_SCOPE_MESSAGE
     mock_fetch.assert_not_called()
-    mock_get_client.assert_not_called()
+    assert mock_groq_client.chat.completions.create.call_count == 1
 
 
 def test_readiness_question_summarizes_real_fetched_data_via_groq():
@@ -164,7 +227,7 @@ def test_groq_failure_returns_fallback_message_not_an_exception():
 def test_role_allowed_categories_matches_the_spec():
     assert ROLE_ALLOWED_CATEGORIES["analyst"] == set(CATEGORY_KEYWORDS.keys())
     assert ROLE_ALLOWED_CATEGORIES["coach"] == {
-        "team_readiness", "player_fatigue", "squad_depth",
+        "team_readiness", "team_season_stats", "player_fatigue", "squad_depth",
         "availability", "player_performance", "match_summary",
     }
     assert ROLE_ALLOWED_CATEGORIES["scout"] == {
@@ -173,19 +236,22 @@ def test_role_allowed_categories_matches_the_spec():
     }
 
 
-@pytest.mark.parametrize("role,question,fetch_patch_target", [
-    ("coach", "Who tops the season rankings?", "app.services.ai_service.fetch_readiness_data"),
-    ("scout", "Is the squad ready for Saturday?", "app.services.ai_service.fetch_readiness_data"),
+@pytest.mark.parametrize("role,question,classified_category,fetch_patch_target", [
+    ("coach", "Who tops the season rankings?", "season_rankings", "app.services.ai_service.fetch_rankings_data"),
+    ("scout", "Is the squad ready for Saturday?", "team_readiness", "app.services.ai_service.fetch_readiness_data"),
 ])
-def test_role_gating_blocks_disallowed_category_with_generic_message(role, question, fetch_patch_target):
+def test_role_gating_blocks_disallowed_category_with_generic_message(
+    role, question, classified_category, fetch_patch_target,
+):
     user = AuthenticatedUser(id="user-1", email="x@example.com", role=role)
+    mock_groq_client = _mock_groq_with_content(classified_category)
     with patch(fetch_patch_target) as mock_fetch, \
-         patch("app.services.ai_service.get_groq_client") as mock_get_client:
+         patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
         result = answer_question(question, MagicMock(), user)
 
     assert result == OUT_OF_SCOPE_MESSAGE
     mock_fetch.assert_not_called()
-    mock_get_client.assert_not_called()
+    assert mock_groq_client.chat.completions.create.call_count == 1
 
 
 def test_role_gating_allows_coach_to_ask_team_readiness():
@@ -249,14 +315,15 @@ def test_player_performance_question_with_unresolvable_name_returns_not_found_me
     fake_client.table.return_value.select.return_value.execute.return_value.data = [
         {"id": 1, "name": "Lionel Messi"},
     ]
+    mock_groq_client = _mock_groq_with_content("player_performance")
 
     with patch("app.services.ai_service.fetch_performance_data") as mock_fetch, \
-         patch("app.services.ai_service.get_groq_client") as mock_get_client:
+         patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
         result = answer_question("How is Ronaldo performing this season?", fake_client, ANALYST_USER)
 
     assert result == PLAYER_NOT_FOUND_MESSAGE
     mock_fetch.assert_not_called()
-    mock_get_client.assert_not_called()
+    assert mock_groq_client.chat.completions.create.call_count == 1  # classification only, no wasted answer call
 
 
 def test_player_comparison_question_resolves_two_names_and_filters_to_both():
@@ -327,7 +394,7 @@ def test_scouting_notes_question_without_a_name_returns_all_caller_notes():
         result = answer_question("What are my scouting notes?", fake_client, scout_user)
 
     assert result == "You have 2 scouting notes."
-    mock_fetch.assert_called_once_with(fake_client, player_id=None, author_id="scout-1")
+    mock_fetch.assert_called_once_with(fake_client, player_id=None, author_id="scout-1", role="scout")
 
 
 def test_scouting_notes_question_with_a_name_filters_to_that_player():
@@ -349,3 +416,100 @@ def test_scouting_notes_question_with_a_name_filters_to_that_player():
     assert result == "You noted Messi's sharp finishing."
     prompt = mock_groq_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
     assert "Needs work off the ball" not in prompt
+
+
+# ------------------------- regressions from live testing -------------------------
+# Each of these reproduces one exact question that failed in real (non-mocked)
+# testing before this pass. The mocked groq client's create() side_effect is a
+# 2-item list: the first call is classify_intent's classification call, the
+# second is the final answer-generation call -- this lets each test control
+# both independently instead of relying on one shared return_value.
+
+def _mock_groq_two_calls(classification, answer_text):
+    classify_response = MagicMock()
+    classify_response.choices[0].message.content = classification
+    answer_response = MagicMock()
+    answer_response.choices[0].message.content = answer_text
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = [classify_response, answer_response]
+    return mock_client
+
+
+def test_season_average_xg_question_classifies_as_player_performance():
+    # Real failure: keyword matching has no "average"/"season"/"xg" keyword
+    # for player_performance, so this used to fall through to out-of-scope.
+    performance_rows = [
+        {"player_id": 1, "name": "Lionel Messi", "xg": 27.65},
+        {"player_id": 2, "name": "Luis Suarez", "xg": 18.0},
+    ]
+    mock_client = _mock_groq_two_calls("player_performance", "Messi's season xG is 27.65.")
+    fake_client = MagicMock()
+    fake_client.table.return_value.select.return_value.execute.return_value.data = [
+        {"id": 1, "name": "Lionel Messi"}, {"id": 2, "name": "Luis Suarez"},
+    ]
+
+    with patch("app.services.ai_service.fetch_performance_data", return_value=performance_rows), \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = answer_question("What's Messi's season average xg?", fake_client, ANALYST_USER)
+
+    assert result == "Messi's season xG is 27.65."
+    prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "27.65" in prompt and "18.0" not in prompt  # filtered to Messi only
+
+
+def test_ppda_trend_question_classifies_as_team_season_stats():
+    # Real failure: no category existed for team-wide PPDA/field-tilt
+    # questions at all.
+    team_info = {"team_name": "Barcelona", "season_ppda_avg": 9.3, "season_field_tilt_avg": 61.2}
+    mock_client = _mock_groq_two_calls("team_season_stats", "Our season PPDA average is 9.3.")
+
+    with patch("app.services.ai_service.fetch_team_info_data", return_value=team_info) as mock_fetch, \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = answer_question("What's our PPDA trend?", MagicMock(), ANALYST_USER)
+
+    assert result == "Our season PPDA average is 9.3."
+    mock_fetch.assert_called_once()
+
+
+def test_analyst_asking_about_notes_on_this_player_gets_every_scouts_notes():
+    # Real failure: analyst got filtered to "my notes" (their own author_id),
+    # which is always empty since analysts don't write scouting notes.
+    all_notes = [
+        {"player_id": 1, "author_id": "scout-1", "note": "Sharp finishing"},
+        {"player_id": 2, "author_id": "scout-2", "note": "Needs work off the ball"},
+    ]
+    mock_client = _mock_groq_two_calls("scouting_notes", "There are 2 scouting notes on file.")
+    analyst_user = AuthenticatedUser(id="analyst-1", email="analyst@example.com", role="analyst")
+    fake_client = MagicMock()
+    fake_client.table.return_value.select.return_value.execute.return_value.data = [
+        {"id": 1, "name": "Lionel Messi"}, {"id": 2, "name": "Luis Suarez"},
+    ]
+
+    with patch("app.services.ai_service.fetch_notes_data", return_value=all_notes) as mock_fetch, \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = answer_question("What have I noted about this player?", fake_client, analyst_user)
+
+    assert result == "There are 2 scouting notes on file."
+    mock_fetch.assert_called_once_with(fake_client, player_id=None, author_id="analyst-1", role="analyst")
+
+
+def test_outperforming_xg_question_sorts_rankings_by_goals_minus_xg_desc():
+    # Real requirement: "who's outperforming their xG" should surface the
+    # biggest positive goals-minus-xG gap first, not whatever order the
+    # cached payload happens to be in.
+    rankings_data = {
+        "query_name": "season_rankings", "computed_at": "2026-07-26T00:00:00Z",
+        "data": [
+            {"player_id": 1, "season_goals": 20, "season_xg": 25.0, "goals_minus_xg": -5.0},
+            {"player_id": 2, "season_goals": 30, "season_xg": 18.0, "goals_minus_xg": 12.0},
+        ],
+    }
+    mock_client = _mock_groq_two_calls("season_rankings", "Player 2 is outperforming their xG the most.")
+
+    with patch("app.services.ai_service.fetch_rankings_data", return_value=rankings_data), \
+         patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        result = answer_question("Who's outperforming their xG?", MagicMock(), ANALYST_USER)
+
+    assert result == "Player 2 is outperforming their xG the most."
+    prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert prompt.index("'goals_minus_xg': 12.0") < prompt.index("'goals_minus_xg': -5.0")

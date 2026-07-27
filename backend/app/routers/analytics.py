@@ -38,7 +38,13 @@ def _latest_cache_rows(client, query_name):
 
 def fetch_rankings_data(client):
     rows = _latest_cache_rows(client, SEASON_RANKINGS)
-    return build_analytics_response(rows, SEASON_RANKINGS)
+    response = build_analytics_response(rows, SEASON_RANKINGS)
+    # goals_minus_xg: positive means outscoring xG (finishing above expectation),
+    # negative means underperforming it -- computed here from season_goals/
+    # season_xg already in the cached payload, not a new BigQuery query.
+    for row in response["data"]:
+        row["goals_minus_xg"] = round((row["season_goals"] or 0) - (row["season_xg"] or 0), 2)
+    return response
 
 
 def fetch_trends_data(client):

@@ -149,6 +149,30 @@ def test_get_scouting_notes_without_player_id_returns_only_the_callers_own_notes
     assert body[0]["note"] == "By scout-1"
 
 
+def test_get_scouting_notes_without_player_id_as_analyst_returns_every_scouts_notes():
+    # Analyst has no notes of their own to be scoped to, unlike a scout --
+    # "my notes" doesn't make sense for this role, so it gets everything.
+    existing = [
+        {"id": 1, "player_id": 5503, "author_id": "scout-1", "note": "By scout-1",
+         "rating": 5, "created_at": "2026-07-20T00:00:00Z"},
+        {"id": 2, "player_id": 9999, "author_id": "scout-2", "note": "By scout-2",
+         "rating": 3, "created_at": "2026-07-20T00:00:00Z"},
+    ]
+    fake_user = FakeUser(id="analyst-1", email="analyst@example.com")
+    app.dependency_overrides[get_db] = lambda: FakeClient(
+        user=fake_user, roles_by_user_id={"analyst-1": "analyst"}, scouting_notes=existing
+    )
+    try:
+        response = client.get("/api/scouting/notes", headers={"Authorization": "Bearer good-token"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert {n["note"] for n in body} == {"By scout-1", "By scout-2"}
+
+
 def test_get_scouting_notes_without_player_id_and_no_notes_returns_empty_list():
     fake_user = FakeUser(id="scout-3", email="scout3@example.com")
     app.dependency_overrides[get_db] = lambda: FakeClient(
