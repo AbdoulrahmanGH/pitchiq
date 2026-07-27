@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, Tooltip, ResponsiveContainer } from 'recharts';
 import { getTeamReadiness, getMatchesSummary, getSquadDepth, getTeamInfo, getPlayerPerformance } from '../services/api';
 import { POS_ABBREV, POS_COLORS } from '../constants';
 import Skeleton from '../components/Skeleton';
@@ -134,7 +135,71 @@ function LastMatchCard({ match, teamName }) {
   );
 }
 
-function SeasonSnapshotCard({ teamInfo, topPerformers, positionByPlayerId }) {
+function PpdaTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const m = payload[0].payload;
+  return (
+    <div style={{ background: '#1C2333', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '7px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>vs {m.opponent}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+        PPDA {m.ppda.toFixed(1)} · {new Date(m.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+      </div>
+    </div>
+  );
+}
+
+// Pressing intensity across the season: one point per match, ordered by
+// date. PPDA is opponent passes allowed per defensive action -- LOWER means
+// a more aggressive press, so dips in this line are the high-press matches.
+function PpdaTimeline({ matches, seasonAvg }) {
+  const data = [...matches]
+    .filter(m => m.ppda != null)
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .map((m, i) => ({ n: i + 1, date: m.date, opponent: m.opponent, ppda: m.ppda }));
+  if (data.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+          Pressing Intensity · PPDA by match
+        </div>
+        <div style={{ fontSize: 9.5, color: 'var(--text-muted)' }}>lower = stronger press</div>
+      </div>
+      <ResponsiveContainer width="100%" height={120}>
+        <LineChart data={data} margin={{ top: 4, right: 6, bottom: 0, left: -26 }}>
+          <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+          <XAxis
+            dataKey="n"
+            tick={{ fill: 'var(--text-muted)', fontSize: 9 }}
+            tickLine={false} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+            ticks={[1, 10, 19, 28, data.length]}
+          />
+          <YAxis
+            tick={{ fill: 'var(--text-muted)', fontSize: 9 }}
+            tickLine={false} axisLine={false} width={54}
+            domain={['auto', 'auto']} tickCount={4}
+          />
+          {seasonAvg != null && (
+            <ReferenceLine y={seasonAvg} stroke="rgba(255,255,255,0.22)" strokeDasharray="4 3" />
+          )}
+          <Tooltip content={<PpdaTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
+          <Line
+            type="monotone" dataKey="ppda"
+            stroke={ACC} strokeWidth={2} dot={false}
+            activeDot={{ r: 3.5, fill: ACC, strokeWidth: 0 }}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+      <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2, textAlign: 'right' }}>
+        match number · dashed line = season avg
+      </div>
+    </div>
+  );
+}
+
+function SeasonSnapshotCard({ teamInfo, topPerformers, positionByPlayerId, matches }) {
   const ppda = teamInfo?.season_ppda_avg;
   const tilt = teamInfo?.season_field_tilt_avg;
   return (
@@ -158,6 +223,8 @@ function SeasonSnapshotCard({ teamInfo, topPerformers, positionByPlayerId }) {
           </div>
         </div>
       </div>
+
+      <PpdaTimeline matches={matches} seasonAvg={ppda} />
 
       {topPerformers.length > 0 && (
         <>
@@ -326,7 +393,7 @@ export default function Dashboard() {
             <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18, flex: '0 0 340px' }}>
                 {lastMatch && <LastMatchCard match={lastMatch} teamName={teamName} />}
-                <SeasonSnapshotCard teamInfo={teamInfo} topPerformers={topPerformers} positionByPlayerId={positionByPlayerId} />
+                <SeasonSnapshotCard teamInfo={teamInfo} topPerformers={topPerformers} positionByPlayerId={positionByPlayerId} matches={matches} />
               </div>
 
               <div style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden' }}>

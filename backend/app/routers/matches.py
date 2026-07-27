@@ -22,6 +22,7 @@ def build_matches_response(matches_rows, team_stats_rows, team_names_by_id, our_
     so the frontend's venue always fell back to a generic 'Home' string).
     """
     possession_by_match = {r["match_id"]: r["possession_pct"] for r in team_stats_rows}
+    ppda_by_match = {r["match_id"]: r.get("ppda") for r in team_stats_rows}
 
     result = []
     for m in matches_rows:
@@ -44,6 +45,7 @@ def build_matches_response(matches_rows, team_stats_rows, team_names_by_id, our_
             "goals_conceded": goals_conceded,
             "stadium": m["stadium"],
             "possession_pct": possession_by_match.get(m["id"]),
+            "ppda": ppda_by_match.get(m["id"]),
         })
     return result
 
@@ -197,7 +199,7 @@ def fetch_matches_summary_data(client):
 
     match_ids = [m["id"] for m in matches_rows]
     team_stats_rows = client.table("team_match_stats").select(
-        "match_id, team_id, possession_pct"
+        "match_id, team_id, possession_pct, ppda"
     ).eq("team_id", BARCELONA_TEAM_ID).in_("match_id", match_ids).execute().data
 
     return build_matches_response(matches_rows, team_stats_rows, team_names_by_id, BARCELONA_TEAM_ID)

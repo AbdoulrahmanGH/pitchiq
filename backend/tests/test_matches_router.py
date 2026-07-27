@@ -90,6 +90,26 @@ def test_matches_summary_attaches_possession_by_match():
     assert result[1]["possession_pct"] == 72.91
 
 
+def test_matches_summary_attaches_ppda_by_match():
+    # Powers the Dashboard's pressing-intensity timeline: our own PPDA for
+    # each match rides along on the summary rows, same join as possession.
+    matches_rows = [
+        {"id": 1, "date": "2015-08-23", "home_team_id": 215, "away_team_id": 217,
+         "home_score": 0, "away_score": 1, "stadium": "San Mames", "match_week": 1},
+        {"id": 2, "date": "2015-08-29", "home_team_id": 217, "away_team_id": 223,
+         "home_score": 1, "away_score": 0, "stadium": "Camp Nou", "match_week": 2},
+    ]
+    team_stats_rows = [
+        {"match_id": 1, "team_id": 217, "possession_pct": 67.58, "ppda": 8.42},
+        {"match_id": 2, "team_id": 217, "possession_pct": 72.91, "ppda": None},
+    ]
+
+    result = build_matches_response(matches_rows, team_stats_rows, TEAM_NAMES, BARCELONA_TEAM_ID)
+
+    assert result[0]["ppda"] == 8.42
+    assert result[1]["ppda"] is None  # zero-denominator match stays null
+
+
 def test_readiness_score_penalizes_five_points_per_at_risk_player():
     at_risk = [{"player_id": 1}, {"player_id": 2}]
 
