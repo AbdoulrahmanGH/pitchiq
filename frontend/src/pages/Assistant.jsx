@@ -1,7 +1,91 @@
 import { useState, useRef, useEffect } from 'react';
+// Deep import, not the package root: lottie-react's package.json "browser"
+// field points at its UMD build, which Vite's dep pre-bundler wraps as
+// `export default require_index_umd()` -- that hands back the whole CJS
+// exports object (default/useLottie/__esModule) instead of unwrapping to
+// the Lottie component itself, so `import Lottie from 'lottie-react'`
+// silently resolves to an object and React throws "invalid element type".
+// The ESM build doesn't have this problem.
+import Lottie from 'lottie-react/build/index.es.js';
 import { askAssistant } from '../services/api';
+import robotAnimation from '../assets/robot-assistant.json';
 
 const ACC = '#FF6B35';
+
+const PROMPT_CHIPS = [
+  "Who's at risk of fatigue right now?",
+  'Is the squad ready for the next match?',
+  'Show me all available midfielders',
+];
+
+// Reveals assistant replies character-by-character (ChatGPT/Claude-style)
+// instead of pasting the full response in on one render. Self-contained --
+// the reveal state lives here, keyed to this component instance, so a
+// message that has already finished animating won't restart just because
+// the parent re-rendered (new messages appended, etc. don't remount it,
+// since Assistant.jsx keys message components by stable index).
+function TypewriterText({ text, speedMs = 16, charsPerTick = 2 }) {
+  const [count, setCount] = useState(0);
+  const nodeRef = useRef(null);
+  const done = count >= text.length;
+
+  useEffect(() => {
+    if (done) return;
+    const id = setTimeout(() => setCount(c => Math.min(text.length, c + charsPerTick)), speedMs);
+    return () => clearTimeout(id);
+  }, [count, done, text, speedMs, charsPerTick]);
+
+  useEffect(() => {
+    nodeRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [count]);
+
+  return (
+    <span ref={nodeRef}>
+      {text.slice(0, count)}
+      {!done && (
+        <span style={{
+          display: 'inline-block', width: 2, height: '1em', marginLeft: 1,
+          background: ACC, verticalAlign: 'text-bottom',
+          animation: 'assistant-caret 0.8s step-end infinite',
+        }} />
+      )}
+    </span>
+  );
+}
+
+function WelcomeScreen({ onPick }) {
+  return (
+    <div style={{ margin: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, maxWidth: 560, padding: '0 20px', textAlign: 'center' }}>
+      <div style={{ width: 128, height: 128 }}>
+        <Lottie animationData={robotAnimation} loop autoplay />
+      </div>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 380 }}>
+        I'm here to help with squad availability and fatigue decisions.
+      </div>
+      <div style={{ fontFamily: 'Space Grotesk', fontSize: 26, fontWeight: 700, color: 'var(--text-primary)' }}>
+        Squad Intelligence Assistant
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {PROMPT_CHIPS.map(q => (
+          <button
+            key={q}
+            onClick={() => onPick(q)}
+            style={{
+              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
+              borderRadius: 10, padding: '12px 16px', fontSize: 12.5, color: 'var(--text-secondary)',
+              maxWidth: 220, cursor: 'pointer', textAlign: 'left', lineHeight: 1.4,
+              transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,107,53,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,107,53,0.25)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.09)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Assistant() {
   const [messages, setMessages] = useState([]);
@@ -13,8 +97,8 @@ export default function Assistant() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  const sendMessage = async () => {
-    const question = input.trim();
+  const sendMessage = async (overrideText) => {
+    const question = (overrideText ?? input).trim();
     if (!question || loading) return;
 
     // Messages always alternate user/assistant, so the last message (if
@@ -49,6 +133,7 @@ export default function Assistant() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <style>{`@keyframes assistant-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }`}</style>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Assistant</div>
@@ -58,9 +143,7 @@ export default function Assistant() {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 12px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {messages.length === 0 && !loading && (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13, margin: 'auto', textAlign: 'center', maxWidth: 340 }}>
-            Ask something like &ldquo;Who&apos;s at risk of fatigue right now?&rdquo; or &ldquo;Is the squad ready for the next match?&rdquo;
-          </div>
+          <WelcomeScreen onPick={(q) => sendMessage(q)} />
         )}
 
         {messages.map((m, i) => (
@@ -76,7 +159,7 @@ export default function Assistant() {
               color: m.role === 'user' ? '#fff' : 'var(--text-primary)',
               border: m.role === 'user' ? 'none' : '1px solid rgba(255,255,255,0.07)',
             }}>
-              {m.content}
+              {m.role === 'assistant' ? <TypewriterText text={m.content} /> : m.content}
             </div>
           </div>
         ))}
@@ -112,7 +195,7 @@ export default function Assistant() {
           }}
         />
         <button
-          onClick={sendMessage}
+          onClick={() => sendMessage()}
           disabled={!input.trim() || loading}
           style={{
             padding: '0 18px',
