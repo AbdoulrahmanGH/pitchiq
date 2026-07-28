@@ -15,8 +15,8 @@ export default function TeamToggle({ teams, value, onChange }) {
               border: 'none', cursor: 'pointer', borderRadius: 6,
               padding: '4px 10px', fontSize: 10.5, fontWeight: 600,
               letterSpacing: '0.02em',
-              background: active ? 'rgba(255,107,53,0.16)' : 'transparent',
-              color: active ? '#FF6B35' : 'var(--text-secondary)',
+              background: active ? 'rgba(255,90,31,0.16)' : 'transparent',
+              color: active ? 'var(--accent-orange)' : 'var(--text-secondary)',
               transition: 'background 0.15s, color 0.15s',
             }}
           >

@@ -7,15 +7,76 @@ const EXPANDED_W = 220;
 const COLLAPSED_W = 68;
 const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
+// Single-color outline icon set replacing the old per-item emoji -- same
+// stroke language as the sidebar logo mark (thin strokes, rounded caps,
+// currentColor so NavItem's active/hover color logic keeps working
+// unchanged). Each is a bare <svg>; NavItem sizes and colors it.
+const NAV_ICONS = {
+  '/': (
+    <svg viewBox="0 0 20 20" width="100%" height="100%" fill="none">
+      <path d="M3 9.5L10 3.5L17 9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 8V16.5H15V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 16.5V12H12V16.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  '/players': (
+    <svg viewBox="0 0 20 20" width="100%" height="100%" fill="none">
+      <circle cx="10" cy="6.5" r="3.25" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3.5 17C3.5 13.4101 6.41015 10.5 10 10.5C13.5899 10.5 16.5 13.4101 16.5 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  ),
+  '/matches': (
+    <svg viewBox="0 0 20 20" width="100%" height="100%" fill="none">
+      <rect x="2.5" y="4" width="15" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10 4V16" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="10" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
+  '/depth': (
+    <svg viewBox="0 0 20 20" width="100%" height="100%" fill="none">
+      <path d="M4 16.5V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M10 16.5V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M16 16.5V3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  ),
+  '/my-notes': (
+    <svg viewBox="0 0 20 20" width="100%" height="100%" fill="none">
+      <path d="M5 3.5H12.5L15 6V16.5H5V3.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M7.5 9H12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M7.5 12.5H12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  ),
+  '/assistant': (
+    <svg viewBox="0 0 20 20" width="100%" height="100%" fill="none">
+      <path d="M3 5.5C3 4.39543 3.89543 3.5 5 3.5H15C16.1046 3.5 17 4.39543 17 5.5V11.5C17 12.6046 16.1046 13.5 15 13.5H9L5.5 16.5V13.5H5C3.89543 13.5 3 12.6046 3 11.5V5.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  ),
+  '/pipeline': (
+    <svg viewBox="0 0 20 20" width="100%" height="100%" fill="none">
+      <path d="M16 8.5C15.6 5.6 13.1 3.5 10 3.5C7.2 3.5 4.9 5.3 4.2 7.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M4 3.5V7.8H8.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 11.5C4.4 14.4 6.9 16.5 10 16.5C12.8 16.5 15.1 14.7 15.8 12.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M16 16.5V12.2H11.7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  '/about': (
+    <svg viewBox="0 0 20 20" width="100%" height="100%" fill="none">
+      <circle cx="10" cy="10" r="6.75" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10 9V14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="10" cy="6.4" r="0.9" fill="currentColor" />
+    </svg>
+  ),
+};
+
 const NAV = [
-  { path: '/',          emoji: '🏠', label: 'Dashboard'    },
-  { path: '/players',   emoji: '👤', label: 'Players'      },
-  { path: '/matches',   emoji: '⚽', label: 'Matches'      },
-  { path: '/depth',     emoji: '📊', label: 'Squad Depth'  },
-  { path: '/my-notes',  emoji: '📝', label: 'My Notes'     },
-  { path: '/assistant', emoji: '💬', label: 'Assistant'    },
-  { path: '/pipeline',  emoji: '🛠️', label: 'Refresh Data' },
-  { path: '/about',     emoji: '📖', label: 'About'        },
+  { path: '/',          label: 'Dashboard'    },
+  { path: '/players',   label: 'Players'      },
+  { path: '/matches',   label: 'Matches'      },
+  { path: '/depth',     label: 'Squad Depth'  },
+  { path: '/my-notes',  label: 'My Notes'     },
+  { path: '/assistant', label: 'Assistant'    },
+  { path: '/pipeline',  label: 'Refresh Data' },
+  { path: '/about',     label: 'About'        },
 ];
 
 // sub matches v1's own framing of each role as a department, not a job
@@ -57,7 +118,7 @@ function useMobile() {
   return mobile;
 }
 
-function NavItem({ path, emoji, label, collapsed }) {
+function NavItem({ path, label, collapsed }) {
   const [hov, setHov] = useState(false);
   return (
     <NavLink to={path} end style={{ textDecoration: 'none' }} title={collapsed ? label : undefined}>
@@ -72,22 +133,33 @@ function NavItem({ path, emoji, label, collapsed }) {
             gap: collapsed ? 0 : 11,
             padding: collapsed ? '12px 0' : '10px 14px',
             borderRadius: 9, cursor: 'pointer',
-            color: isActive ? 'var(--orange)' : hov ? 'var(--text-primary)' : 'var(--text-secondary)',
-            background: isActive ? 'rgba(255,107,53,0.1)' : hov ? 'rgba(255,255,255,0.04)' : 'transparent',
-            transition: `background 0.18s ease, color 0.18s ease, justify-content 0.28s ${EASE}, gap 0.28s ${EASE}, padding 0.28s ${EASE}`,
+            // Muted highlight: active state reads as a neutral, elevated
+            // surface (bg-surface + a hairline border), not a glowing
+            // orange fill -- the small left accent bar below is the only
+            // place the brand orange still appears here.
+            color: isActive ? 'var(--text-primary)' : hov ? 'var(--text-primary)' : 'var(--text-secondary)',
+            background: isActive ? 'var(--bg-surface)' : hov ? 'rgba(255,255,255,0.04)' : 'transparent',
+            border: `1px solid ${isActive ? 'var(--border-color)' : 'transparent'}`,
+            transition: `background 0.18s ease, color 0.18s ease, border-color 0.18s ease, justify-content 0.28s ${EASE}, gap 0.28s ${EASE}, padding 0.28s ${EASE}`,
             fontSize: 13.5,
             fontWeight: isActive ? 600 : 400, position: 'relative',
           }}
         >
           {isActive && (
             <div style={{
-              position: 'absolute', left: 0, top: '50%',
+              position: 'absolute', left: -1, top: '50%',
               transform: 'translateY(-50%)',
               width: 3, height: 18,
-              background: 'var(--orange)', borderRadius: '0 3px 3px 0',
+              background: 'var(--accent-orange)', borderRadius: '0 3px 3px 0',
             }} />
           )}
-          <span style={{ fontSize: collapsed ? 18 : 14, transition: `font-size 0.2s ${EASE}`, flexShrink: 0 }}>{emoji}</span>
+          <span style={{
+            width: collapsed ? 18 : 14, height: collapsed ? 18 : 14,
+            transition: `width 0.2s ${EASE}, height 0.2s ${EASE}`, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {NAV_ICONS[path]}
+          </span>
           <span style={{
             opacity: collapsed ? 0 : 1,
             maxWidth: collapsed ? 0 : 140,
@@ -120,11 +192,17 @@ function NavSkeleton({ collapsed }) {
   );
 }
 
-// Chevron toggle: the explicit, always-visible collapse/expand control.
-// Sits half-off the sidebar's right edge so it reads as a distinct
-// affordance rather than blending into the rail.
+// The explicit, always-visible collapse/expand control. Sits half-off the
+// sidebar's right edge so it reads as a distinct affordance rather than
+// blending into the rail. Its icon is an animated hamburger <-> X: three
+// bars while expanded (click to collapse to the icon rail), morphing into
+// an X once collapsed (click to expand back).
 function CollapseToggle({ collapsed, onClick }) {
   const [hov, setHov] = useState(false);
+  const barW = 12, barH = 1.6, gap = 3.4;
+  const stackH = barH * 3 + gap * 2;
+  const mid = stackH / 2 - barH / 2;
+  const open = !collapsed;
   return (
     <button
       onClick={onClick}
@@ -136,7 +214,7 @@ function CollapseToggle({ collapsed, onClick }) {
         position: 'absolute', top: 26, right: -12,
         width: 24, height: 24, borderRadius: '50%',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: hov ? 'var(--orange)' : '#181B27',
+        background: hov ? 'var(--accent-orange)' : '#181B27',
         border: '1px solid rgba(255,255,255,0.10)',
         color: hov ? '#fff' : 'var(--text-secondary)',
         cursor: 'pointer', zIndex: 5, padding: 0,
@@ -144,43 +222,8 @@ function CollapseToggle({ collapsed, onClick }) {
         transition: `background 0.15s ease, color 0.15s ease`,
       }}
     >
-      <svg
-        width="11" height="11" viewBox="0 0 11 11" fill="none"
-        style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: `transform 0.28s ${EASE}` }}
-      >
-        <path d="M7 2L3.5 5.5L7 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </button>
-  );
-}
-
-// Brand mark: an orange square containing three bars that morph into an X
-// when the sidebar is collapsed -- an animated hamburger glyph rather than
-// a static icon, doubling as the sidebar's brand identity. Clickable when a
-// toggle handler is supplied (top logo row); purely decorative in the
-// footer (smaller, non-interactive, echoes the brand instead of acting as
-// a second control).
-function BrandMark({ size = 28, open = true, onClick }) {
-  const barW = size * 0.5;
-  const barH = Math.max(1.4, size * 0.07);
-  const gap = size * 0.16;
-  const stackH = barH * 3 + gap * 2;
-  const Tag = onClick ? 'button' : 'div';
-  return (
-    <Tag
-      onClick={onClick}
-      title={onClick ? (open ? 'Collapse sidebar' : 'Expand sidebar') : undefined}
-      aria-label={onClick ? (open ? 'Collapse sidebar' : 'Expand sidebar') : undefined}
-      style={{
-        width: size, height: size, borderRadius: size * 0.25, flexShrink: 0,
-        background: 'linear-gradient(135deg, #FF6B35, #c94a1a)',
-        border: 'none', padding: 0, cursor: onClick ? 'pointer' : 'default',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
-    >
       <span style={{ position: 'relative', width: barW, height: stackH, display: 'block' }}>
         {[0, 1, 2].map(i => {
-          const mid = stackH / 2 - barH / 2;
           const closedStyle = i === 1
             ? { top: mid, opacity: 0, transform: 'scaleX(0)' }
             : { top: mid, transform: `rotate(${i === 0 ? 45 : -45}deg)` };
@@ -191,7 +234,7 @@ function BrandMark({ size = 28, open = true, onClick }) {
               key={i}
               style={{
                 position: 'absolute', left: 0, width: barW, height: barH, borderRadius: barH / 2,
-                background: '#fff', transformOrigin: 'center',
+                background: 'currentColor', transformOrigin: 'center',
                 transition: `transform 0.32s ${EASE}, opacity 0.24s ease, top 0.32s ${EASE}`,
                 ...s,
               }}
@@ -199,7 +242,33 @@ function BrandMark({ size = 28, open = true, onClick }) {
           );
         })}
       </span>
-    </Tag>
+    </button>
+  );
+}
+
+// PitchIQ icon mark -- inline SVG per the redesign spec (icon group only;
+// the wordmark next to it is real text, not SVG <text>, so it stays crisp
+// and lets the font stack's actual loaded font drive its own metrics).
+// Sidebar-header-only: no second copy anywhere else in the app.
+function PitchIQLogo({ size = 28 }) {
+  return (
+    <svg viewBox="0 0 36 36" width={size} height={size} fill="none" style={{ flexShrink: 0 }}>
+      <defs>
+        <linearGradient id="pitchiq-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FF6B35" />
+          <stop offset="100%" stopColor="#FF3E00" />
+        </linearGradient>
+        <filter id="pitchiq-glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="1.5" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+      <rect x="0" y="0" width="36" height="36" rx="10" fill="#141824" stroke="#23293A" strokeWidth="1.5" />
+      <circle cx="18" cy="18" r="10" stroke="#94A3B8" strokeWidth="2" strokeDasharray="24 8" strokeLinecap="round" fill="none" opacity="0.8" />
+      <circle cx="18" cy="18" r="3" fill="#94A3B8" opacity="0.5" />
+      <path d="M14 22 L19 17 L22 20 L28 12" stroke="url(#pitchiq-gradient)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" filter="url(#pitchiq-glow)" />
+      <path d="M25 12 H28 V15" stroke="#FF6B35" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -241,21 +310,6 @@ function SidebarFooter({ collapsed }) {
     <div style={{ marginTop: 'auto', padding: collapsed ? '16px 0 20px' : '20px 6px 24px' }}>
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14 }}>
 
-        {/* Brand signature -- mark + wordmark, same identity as the top
-            logo row, restated in the footer per the redesign spec. */}
-        <div style={{
-          display: 'flex', alignItems: 'center',
-          justifyContent: collapsed ? 'center' : 'flex-start',
-          gap: 8, marginBottom: 14,
-        }}>
-          <BrandMark size={20} open />
-          {!collapsed && (
-            <span style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 13, color: 'var(--orange)', letterSpacing: '0.03em' }}>
-              PitchIQ
-            </span>
-          )}
-        </div>
-
         <div style={{
           display: 'flex', alignItems: 'center',
           justifyContent: collapsed ? 'center' : 'flex-start',
@@ -264,7 +318,7 @@ function SidebarFooter({ collapsed }) {
         title={collapsed ? `${roleInfo.label} · ${session.user.email}` : undefined}
         >
           {collapsed ? (
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--orange)', flexShrink: 0 }} />
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-orange)', flexShrink: 0 }} />
           ) : roleLoading ? (
             <div style={{ flex: 1, minWidth: 0 }}>
               <Skeleton width={70} height={11} style={{ marginBottom: 6 }} />
@@ -351,18 +405,16 @@ export default function Sidebar() {
         transition: `padding 0.28s ${EASE}`,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: collapsed ? 0 : 8, transition: `gap 0.28s ${EASE}` }}>
-          <BrandMark
-            size={28}
-            open={!collapsed}
-            onClick={isMobile ? undefined : () => setManualCollapsed(c => !c)}
-          />
+          <PitchIQLogo size={28} />
           <div style={{
             opacity: collapsed ? 0 : 1,
             maxWidth: collapsed ? 0 : 140,
             overflow: 'hidden', whiteSpace: 'nowrap',
             transition: `opacity 0.18s ${collapsed ? '0s' : '0.12s'} ease, max-width 0.28s ${EASE}`,
           }}>
-            <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 17, color: 'var(--orange)', letterSpacing: '0.04em' }}>PitchIQ</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 17, letterSpacing: '0.02em' }}>
+              <span style={{ color: 'var(--text-primary)' }}>Pitch</span><span style={{ color: 'var(--accent-orange)', fontWeight: 800 }}>IQ</span>
+            </div>
           </div>
         </div>
       </div>

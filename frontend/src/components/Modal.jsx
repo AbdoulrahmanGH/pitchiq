@@ -42,7 +42,7 @@ export default function Modal({ open, onClose, children, maxWidth = 480 }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           maxWidth, width: '100%', maxHeight: '86vh', overflow: 'auto',
-          background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)',
+          background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)',
           border: '1px solid rgba(255,255,255,0.08)', borderRadius: 18,
           boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
           opacity: show ? 1 : 0,

@@ -3,12 +3,12 @@ import { getMatchesSummary, getTeamInfo } from '../services/api';
 import Skeleton from '../components/Skeleton';
 import MatchModal from '../components/MatchModal';
 
-const ACC = '#FF6B35';
+const ACC = '#FF5A1F';
 
 const RES_MAP = {
-  win:  { label: 'WIN',  color: 'var(--green)',  bg: 'var(--green-dim)',  border: 'rgba(63,185,80,0.2)',   dot: '#3FB950' },
-  draw: { label: 'DRAW', color: 'var(--yellow)', bg: 'var(--yellow-dim)', border: 'rgba(210,153,34,0.2)', dot: '#D29922' },
-  loss: { label: 'LOSS', color: 'var(--red)',    bg: 'var(--red-dim)',    border: 'rgba(248,81,73,0.2)',  dot: '#F85149' },
+  win:  { label: 'WIN',  color: 'var(--green)',  bg: 'var(--green-dim)',  border: 'rgba(63,185,80,0.2)',   dot: 'var(--green)' },
+  draw: { label: 'DRAW', color: 'var(--yellow)', bg: 'var(--yellow-dim)', border: 'rgba(210,153,34,0.2)', dot: 'var(--yellow)' },
+  loss: { label: 'LOSS', color: 'var(--red)',    bg: 'var(--red-dim)',    border: 'rgba(248,81,73,0.2)',  dot: 'var(--red)' },
 };
 
 function formatDate(dateStr) {
@@ -49,8 +49,8 @@ function MatchCard({ match, teamName, onSelect }) {
       onMouseLeave={() => setHov(false)}
       onClick={() => onSelect(match.id)}
       style={{
-        background: hov ? 'linear-gradient(145deg, #20293A 0%, #1A2230 100%)' : 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)',
-        border: hov ? '1px solid rgba(255,107,53,0.18)' : '1px solid rgba(255,255,255,0.07)',
+        background: hov ? 'linear-gradient(145deg, var(--surface3) 0%, var(--surface2) 100%)' : 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)',
+        border: hov ? '1px solid rgba(255,90,31,0.18)' : '1px solid rgba(255,255,255,0.07)',
         borderRadius: 16, padding: '22px 28px',
         display: 'flex', alignItems: 'center',
         transition: 'background 0.2s, border 0.2s, box-shadow 0.2s',
@@ -63,7 +63,7 @@ function MatchCard({ match, teamName, onSelect }) {
       <div style={{ width: 88, flexShrink: 0, paddingLeft: 8 }}>
         <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>{formatDate(match.date)}</div>
         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>{isHome ? 'Home' : 'Away'}</div>
-        <div style={{ marginTop: 6, display: 'inline-block', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', padding: '2px 7px', borderRadius: 4, background: isHome ? 'rgba(88,166,255,0.1)' : 'rgba(255,255,255,0.06)', color: isHome ? '#58A6FF' : 'var(--text-muted)', border: `1px solid ${isHome ? 'rgba(88,166,255,0.2)' : 'rgba(255,255,255,0.07)'}` }}>
+        <div style={{ marginTop: 6, display: 'inline-block', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', padding: '2px 7px', borderRadius: 4, background: isHome ? 'rgba(88,166,255,0.1)' : 'rgba(255,255,255,0.06)', color: isHome ? 'var(--blue)' : 'var(--text-muted)', border: `1px solid ${isHome ? 'rgba(88,166,255,0.2)' : 'rgba(255,255,255,0.07)'}` }}>
           {isHome ? 'HOME' : 'AWAY'}
         </div>
       </div>
@@ -103,7 +103,7 @@ function MatchCard({ match, teamName, onSelect }) {
 
       {match.possession_pct != null
         ? <PossessionBar pct={match.possession_pct} color={res.color} teamName={teamName} />
-        : <div style={{ width: 160, flexShrink: 0, textAlign: 'center', fontSize: 11, color: '#8B949E' }}>No data</div>
+        : <div style={{ width: 160, flexShrink: 0, textAlign: 'center', fontSize: 11, color: 'var(--text-secondary)' }}>No data</div>
       }
     </div>
   );
@@ -165,7 +165,7 @@ export default function Matches() {
           <>
             <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
               {[0, 1, 2, 3].map(i => (
-                <div key={i} style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '20px 24px' }}>
+                <div key={i} style={{ flex: 1, background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '20px 24px' }}>
                   <Skeleton width={90} height={10.5} style={{ marginBottom: 12 }} />
                   <Skeleton width={60} height={44} />
                 </div>
@@ -182,7 +182,7 @@ export default function Matches() {
           <>
             <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
               {summaryCards.map(({ label, value, color, sub }) => (
-                <div key={label} style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '20px 24px', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+                <div key={label} style={{ flex: 1, background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '20px 24px', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
                   <div style={{ position: 'absolute', top: -20, right: -20, width: 72, height: 72, background: `radial-gradient(circle, ${color}1A 0%, transparent 70%)`, pointerEvents: 'none' }} />
                   <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: 12 }}>{label}</div>
                   <div style={{ fontFamily: 'Space Grotesk', fontSize: 44, fontWeight: 700, lineHeight: 1, letterSpacing: '-2px', color }}>{value}</div>

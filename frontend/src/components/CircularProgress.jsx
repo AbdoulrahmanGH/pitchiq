@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const ACC = '#FF6B35';
+const ACC = '#FF5A1F';
 
 export default function CircularProgress({ value, size = 72, stroke = 5 }) {
   const r = (size - stroke * 2) / 2;

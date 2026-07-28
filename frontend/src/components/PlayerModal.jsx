@@ -55,7 +55,7 @@ export default function PlayerModal({ player, open, onClose }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
           <StatTile label="Minutes"            value={player.total_minutes} />
-          <StatTile label="Goals"               value={player.total_goals}   color="#FF6B35" />
+          <StatTile label="Goals"               value={player.total_goals}   color="var(--accent-orange)" />
           <StatTile label="Assists"             value={player.total_assists} color="var(--blue)" />
           <StatTile label="xG"                  value={player.xg} />
           <StatTile label="xA"                  value={player.xa} />

@@ -1,4 +1,4 @@
-const ACC = '#FF6B35';
+const ACC = '#FF5A1F';
 
 // Plain-language version of the pipeline, for a general audience -- the
 // full engineer-facing version (raw JSON, GCS, BigQuery mirror, Cloud Run,

@@ -6,7 +6,7 @@ import {
 import Skeleton from './Skeleton';
 import { getPlayerRadar } from '../services/api';
 
-const ACC = '#FF6B35';
+const ACC = '#FF5A1F';
 
 // Percentile-based radar: every axis is 0-100 by construction, so the six
 // per-90 metrics share one scale without any per-axis normalization tricks.
@@ -17,7 +17,7 @@ function RadarTooltip({ active, payload }) {
   const m = payload[0].payload;
   return (
     <div style={{
-      background: 'var(--surface3, #1C2333)', border: '1px solid rgba(255,255,255,0.1)',
+      background: 'var(--surface3)', border: '1px solid rgba(255,255,255,0.1)',
       borderRadius: 8, padding: '7px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
     }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>

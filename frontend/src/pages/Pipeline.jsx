@@ -3,12 +3,12 @@ import { useAuth } from '../services/AuthProvider';
 import { getPipelineStatus, triggerPipelineRefresh } from '../services/api';
 import Skeleton from '../components/Skeleton';
 
-const ACC = '#FF6B35';
+const ACC = '#FF5A1F';
 
 const STATUS_STYLE = {
   succeeded: { label: 'SUCCEEDED', color: 'var(--green)', bg: 'var(--green-dim)', border: 'rgba(63,185,80,0.2)' },
   failed:    { label: 'FAILED',    color: 'var(--red)',   bg: 'var(--red-dim)',   border: 'rgba(248,81,73,0.2)' },
-  running:   { label: 'RUNNING',   color: ACC,             bg: 'var(--orange-dim)', border: 'rgba(255,107,53,0.25)' },
+  running:   { label: 'RUNNING',   color: ACC,             bg: 'var(--orange-dim)', border: 'rgba(255,90,31,0.25)' },
   pending:   { label: 'PENDING',   color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.08)' },
 };
 
@@ -99,7 +99,7 @@ function RefreshButton({ onClick, refreshing }) {
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '9px 18px', borderRadius: 9, border: 'none',
-        background: refreshing ? 'rgba(255,107,53,0.25)' : ACC,
+        background: refreshing ? 'rgba(255,90,31,0.25)' : ACC,
         color: refreshing ? 'var(--text-secondary)' : '#1a0f08',
         fontSize: 12.5, fontWeight: 700, letterSpacing: '0.02em',
         cursor: refreshing ? 'default' : 'pointer',

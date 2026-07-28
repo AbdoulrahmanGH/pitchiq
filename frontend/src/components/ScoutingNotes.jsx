@@ -3,7 +3,7 @@ import { useAuth } from '../services/AuthProvider';
 import { getScoutingNotes, postScoutingNote } from '../services/api';
 import { SCOUTING_RATING_LABELS } from '../constants';
 
-const ACC = '#FF6B35';
+const ACC = '#FF5A1F';
 
 function RatingPicker({ value, onChange }) {
   return (
@@ -132,7 +132,7 @@ export default function ScoutingNotes({ playerId }) {
               disabled={submitting || !draft.trim() || !rating}
               style={{
                 padding: '7px 16px', borderRadius: 8, border: 'none',
-                background: (!draft.trim() || !rating) ? 'rgba(255,107,53,0.3)' : ACC,
+                background: (!draft.trim() || !rating) ? 'rgba(255,90,31,0.3)' : ACC,
                 color: '#1a0f08', fontSize: 12, fontWeight: 700,
                 cursor: (!draft.trim() || !rating) ? 'default' : 'pointer',
                 transition: 'background 0.15s',

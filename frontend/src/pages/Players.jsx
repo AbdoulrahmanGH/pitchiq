@@ -1,13 +1,17 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { getPlayerPerformance, getFatigueRisk, getTeamInfo } from '../services/api';
 import { useAuth } from '../services/AuthProvider';
-import { POS_ABBREV, POS_COLORS } from '../constants';
+import { POS_ABBREV, POS_COLORS, initials } from '../constants';
 import Skeleton from '../components/Skeleton';
 import PlayerModal from '../components/PlayerModal';
 
-const DROPDOWN_OPTION_STYLE = { background: '#1C2333', color: '#E6EDF3' };
+const DROPDOWN_OPTION_STYLE = { background: '#1A2030', color: '#F1F5F9' };
 
-const ACC = '#FF6B35';
+// Kept as a literal (not var(--accent-orange)) because it's string-concatenated
+// into alpha-suffixed hex colors below (e.g. `${ACC}18`) -- a CSS var
+// reference can't take a hex alpha suffix. Must match --accent-orange in
+// index.css.
+const ACC = '#FF5A1F';
 const POS_MAP = { GK: 'Goalkeeper', DEF: 'Defender', MID: 'Midfielder', FWD: 'Forward' };
 
 const COLUMNS = [
@@ -39,12 +43,15 @@ function PosBadge({ pos }) {
   );
 }
 
-function MiniBar({ value, max, color }) {
+// Monochrome micro-bar -- a plain neutral fill rather than a bright
+// per-column accent color, so a dense table full of these doesn't read as
+// a wall of competing sparkline colors.
+function MiniBar({ value, max }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
       <span style={{ fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 12, color: 'var(--text-primary)', minWidth: 24, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-      <div style={{ width: 28, height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, flexShrink: 0 }}>
-        <div style={{ width: `${Math.min((value / max) * 100, 100)}%`, height: '100%', background: color, borderRadius: 2 }} />
+      <div style={{ width: 28, height: 3, background: 'var(--border-color)', borderRadius: 2, flexShrink: 0 }}>
+        <div style={{ width: `${Math.min((value / max) * 100, 100)}%`, height: '100%', background: 'var(--text-secondary)', borderRadius: 2 }} />
       </div>
     </div>
   );
@@ -83,8 +90,8 @@ function TableRow({ player, acc, maxShots, maxPasses, onSelect }) {
       }}
     >
       <div style={{ width: 180, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, paddingRight: 8 }}>
-        <div style={{ width: 28, height: 28, borderRadius: 7, background: 'linear-gradient(135deg, #252D3A, #1A2030)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontFamily: 'Space Grotesk', fontWeight: 700, color: '#8B949E', flexShrink: 0 }}>
-          {player.player_id}
+        <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--surface2)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontFamily: 'Space Grotesk', fontWeight: 700, color: 'var(--text-secondary)', flexShrink: 0 }}>
+          {initials(player.name)}
         </div>
         <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{player.name}</span>
       </div>
@@ -110,15 +117,15 @@ function TableRow({ player, acc, maxShots, maxPasses, onSelect }) {
       </div>
 
       <div className="col-hide-mobile" style={{ width: 60, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
-        <MiniBar value={player.total_shots} max={maxShots} color={acc} />
+        <MiniBar value={player.total_shots} max={maxShots} />
       </div>
 
       <div className="col-hide-mobile" style={{ width: 70, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
-        <MiniBar value={player.total_passes_attempted} max={maxPasses} color="var(--purple)" />
+        <MiniBar value={player.total_passes_attempted} max={maxPasses} />
       </div>
 
       <div style={{ width: 55, flexShrink: 0, textAlign: 'center' }}>
-        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.xg > 0.3 ? '#58A6FF' : 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{player.xg}</span>
+        <span style={{ fontFamily: 'Space Grotesk', fontSize: 12, fontWeight: 600, color: player.xg > 0.3 ? 'var(--blue)' : 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{player.xg}</span>
       </div>
 
       <div className="col-hide-mobile" style={{ width: 55, flexShrink: 0, textAlign: 'center' }}>
@@ -276,7 +283,7 @@ export default function Players() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '0 20px', minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
         <div style={{ padding: '8px 0' }}>
-          <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Player Performance</div>
+          <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Players Performance</div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{leagueLabel} · {players.length} Players</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 0' }}>
@@ -294,8 +301,8 @@ export default function Players() {
               }}
             />
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-              <circle cx="5.5" cy="5.5" r="4.2" stroke="#8B949E" strokeWidth="1.3" />
-              <line x1="8.6" y1="8.6" x2="12" y2="12" stroke="#8B949E" strokeWidth="1.3" strokeLinecap="round" />
+              <circle cx="5.5" cy="5.5" r="4.2" style={{ stroke: 'var(--text-secondary)' }} strokeWidth="1.3" />
+              <line x1="8.6" y1="8.6" x2="12" y2="12" style={{ stroke: 'var(--text-secondary)' }} strokeWidth="1.3" strokeLinecap="round" />
             </svg>
           </div>
           {['ALL', 'GK', 'DEF', 'MID', 'FWD'].map(p => {
@@ -305,9 +312,9 @@ export default function Players() {
               <div key={p} onClick={() => setFilterPos(p)} style={{
                 padding: '5px 12px', borderRadius: 7, fontSize: 11, fontWeight: 600,
                 cursor: 'pointer', letterSpacing: '0.08em',
-                background: isActive ? (p === 'ALL' ? 'rgba(255,107,53,0.12)' : m.bg) : 'rgba(255,255,255,0.04)',
+                background: isActive ? (p === 'ALL' ? 'rgba(255,90,31,0.12)' : m.bg) : 'rgba(255,255,255,0.04)',
                 color: isActive ? (p === 'ALL' ? ACC : m.color) : 'var(--text-secondary)',
-                border: `1px solid ${isActive ? (p === 'ALL' ? 'rgba(255,107,53,0.25)' : m.color + '44') : 'rgba(255,255,255,0.07)'}`,
+                border: `1px solid ${isActive ? (p === 'ALL' ? 'rgba(255,90,31,0.25)' : m.color + '44') : 'rgba(255,255,255,0.07)'}`,
                 transition: 'all 0.15s',
               }}>{p}</div>
             );
@@ -335,13 +342,13 @@ export default function Players() {
           <>
             <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
               {[0, 1, 2].map(i => (
-                <div key={i} style={{ flex: '1 1 160px', background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px' }}>
+                <div key={i} style={{ flex: '1 1 160px', background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px' }}>
                   <Skeleton width={110} height={10.5} style={{ marginBottom: 12 }} />
                   <Skeleton width={70} height={36} />
                 </div>
               ))}
             </div>
-            <div style={{ borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', padding: 16 }}>
+            <div style={{ borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', padding: 16 }}>
               {[0, 1, 2, 3, 4, 5, 6, 7].map(i => (
                 <Skeleton key={i} height={40} style={{ marginBottom: i === 7 ? 0 : 10 }} />
               ))}
@@ -358,8 +365,8 @@ export default function Players() {
                 { label: 'Total Assists', value: totalAssists, color: 'var(--blue)'  },
                 { label: 'Total xG',      value: totalXg,      color: 'var(--green)' },
               ].map(({ label, value, color }) => (
-                <div key={label} style={{ flex: '1 1 160px', background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
-                  <div style={{ position: 'absolute', top: -20, right: -20, width: 70, height: 70, borderRadius: '50%', background: `radial-gradient(circle, ${color}18 0%, transparent 70%)`, pointerEvents: 'none' }} />
+                <div key={label} style={{ flex: '1 1 160px', background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+                  <div style={{ position: 'absolute', top: -20, right: -20, width: 70, height: 70, borderRadius: '50%', background: `radial-gradient(circle, color-mix(in srgb, ${color} 10%, transparent) 0%, transparent 70%)`, pointerEvents: 'none' }} />
                   <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: 8 }}>{label}</div>
                   <div style={{ fontFamily: 'Space Grotesk', fontSize: 36, fontWeight: 700, lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-1px', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
                   <div style={{ marginTop: 10, height: 2, background: 'rgba(255,255,255,0.05)', borderRadius: 1 }}>
@@ -375,7 +382,7 @@ export default function Players() {
                 <div style={{
                   position: 'absolute',
                   top: 8, right: 0, bottom: 0, width: 80,
-                  background: 'linear-gradient(to left, #161B22 0%, transparent 100%)',
+                  background: 'linear-gradient(to left, var(--bg-surface) 0%, transparent 100%)',
                   borderRadius: '0 16px 16px 0',
                   pointerEvents: 'none',
                   zIndex: 2,
@@ -392,7 +399,7 @@ export default function Players() {
                     WebkitOverflowScrolling: 'touch',
                     borderRadius: 16,
                     border: '1px solid rgba(255,255,255,0.07)',
-                    background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)',
+                    background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)',
                   }}
                 >
                   <div style={{ minWidth: TABLE_MIN_W, width: 'max-content', transform: 'scaleY(-1)' }}>
@@ -407,7 +414,7 @@ export default function Players() {
                             width: col.w, flexShrink: 0,
                             padding: '11px 4px',
                             fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                            color: sortKey === col.key ? ACC : '#8B949E',
+                            color: sortKey === col.key ? ACC : 'var(--text-secondary)',
                             cursor: col.key !== 'status' && col.key !== 'pos' && col.key !== 'team_name' ? 'pointer' : 'default',
                             display: 'flex', alignItems: 'center',
                             justifyContent: col.center ? 'center' : 'flex-start',
@@ -437,7 +444,7 @@ export default function Players() {
 
             <div style={{
               marginTop: 8, textAlign: 'center',
-              fontSize: 11, color: '#8B949E',
+              fontSize: 11, color: 'var(--text-secondary)',
               opacity: hintOpacity,
               transition: 'opacity 0.8s ease',
               pointerEvents: 'none',

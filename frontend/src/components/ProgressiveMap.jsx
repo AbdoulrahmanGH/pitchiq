@@ -95,7 +95,7 @@ export default function ProgressiveMap({ matchId, homeTeam, awayTeam }) {
         {hover != null && actions[hover] && (
           <div style={{
             position: 'absolute', top: 6, left: 6, pointerEvents: 'none',
-            background: 'var(--surface3, #1C2333)', border: '1px solid rgba(255,255,255,0.1)',
+            background: 'var(--surface3)', border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: 8, padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
           }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>

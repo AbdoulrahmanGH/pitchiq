@@ -1,24 +1,24 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, Tooltip, ResponsiveContainer } from 'recharts';
 import { getTeamReadiness, getMatchesSummary, getSquadDepth, getTeamInfo, getPlayerPerformance } from '../services/api';
-import { POS_ABBREV, POS_COLORS } from '../constants';
+import { POS_ABBREV, POS_COLORS, initials } from '../constants';
 import Skeleton from '../components/Skeleton';
 import Avatar from '../components/Avatar';
 import CircularProgress from '../components/CircularProgress';
 
 const RECENT_MINUTES_MAX = 270; // 3 full 90-minute matches -- matches the "last 3 fixtures" workload window
 
-const ACC = '#FF6B35';
+const ACC = '#FF5A1F';
 
 function StatCard({ title, value, sub, children }) {
   return (
     <div style={{
-      background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)',
+      background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)',
       border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16,
       padding: '24px 26px', flex: 1, position: 'relative', overflow: 'hidden',
       boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
     }}>
-      <div style={{ position: 'absolute', top: -30, right: -30, width: 80, height: 80, background: 'radial-gradient(circle, rgba(255,107,53,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: -30, right: -30, width: 80, height: 80, background: 'radial-gradient(circle, rgba(255,90,31,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
       <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: 14 }}>{title}</div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, justifyContent: 'space-between' }}>
         <div>
@@ -36,23 +36,22 @@ function FatigueCard({ player, positionByPlayerId }) {
   const name = player.name || player.player_id;
   const posLabel = POS_ABBREV[positionByPlayerId[player.player_id]] || '???';
   const posStyle = POS_COLORS[posLabel] || { color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)' };
-  const num = player.player_id;
 
   return (
     <div
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        background: hov ? 'linear-gradient(145deg, #202736 0%, #1C2333 100%)' : 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)',
-        border: hov ? '1px solid rgba(255,107,53,0.2)' : '1px solid rgba(255,255,255,0.07)',
+        background: hov ? 'linear-gradient(145deg, var(--surface3) 0%, var(--surface2) 100%)' : 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)',
+        border: hov ? '1px solid rgba(255,90,31,0.2)' : '1px solid rgba(255,255,255,0.07)',
         borderRadius: 16, padding: '22px 22px 20px', flex: 1,
         transition: 'background 0.2s, border 0.2s, box-shadow 0.2s',
         boxShadow: hov ? '0 8px 32px rgba(0,0,0,0.4)' : '0 4px 16px rgba(0,0,0,0.3)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-        <div style={{ width: 42, height: 42, borderRadius: 10, background: 'linear-gradient(135deg, #252D3A, #1A2030)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontFamily: 'Space Grotesk', fontWeight: 700, color: 'var(--text-secondary)', flexShrink: 0 }}>
-          {num}
+        <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--surface2)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontFamily: 'Space Grotesk', fontWeight: 700, color: 'var(--text-secondary)', flexShrink: 0 }}>
+          {initials(name)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
@@ -62,18 +61,18 @@ function FatigueCard({ player, positionByPlayerId }) {
           AT RISK
         </div>
       </div>
-      <div style={{ fontSize: 12, color: '#E6EDF3', lineHeight: 1.55, padding: '10px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: 8, borderLeft: '3px solid var(--red)', marginBottom: 14 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.55, padding: '10px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: 8, borderLeft: '3px solid var(--red)', marginBottom: 14 }}>
         {player.reason}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <div style={{ display: 'flex', gap: 16 }}>
           <div>
-            <div style={{ fontSize: 9.5, color: '#8B949E', letterSpacing: '0.08em', marginBottom: 2 }}>REST DAYS</div>
-            <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: '#C9D1D9', fontVariantNumeric: 'tabular-nums' }}>{player.rest_days}</div>
+            <div style={{ fontSize: 9.5, color: 'var(--text-secondary)', letterSpacing: '0.08em', marginBottom: 2 }}>REST DAYS</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{player.rest_days}</div>
           </div>
           <div>
-            <div style={{ fontSize: 9.5, color: '#8B949E', letterSpacing: '0.08em', marginBottom: 2 }}>RECENT MINS</div>
-            <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: '#C9D1D9', fontVariantNumeric: 'tabular-nums' }}>{player.recent_minutes}</div>
+            <div style={{ fontSize: 9.5, color: 'var(--text-secondary)', letterSpacing: '0.08em', marginBottom: 2 }}>RECENT MINS</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{player.recent_minutes}</div>
           </div>
         </div>
       </div>
@@ -95,7 +94,7 @@ function LastMatchCard({ match, teamName }) {
   const dateStr = new Date(match.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
-    <div style={{ background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden', flex: '0 0 340px' }}>
+    <div style={{ background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden', flex: '0 0 340px' }}>
       <div style={{ height: 6, background: `linear-gradient(90deg, transparent, ${ACC}44, ${ACC}, ${ACC}44, transparent)` }} />
       <div style={{ padding: '20px 24px 22px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
@@ -107,9 +106,9 @@ function LastMatchCard({ match, teamName }) {
             {teamName} <span style={{ color: 'var(--text-muted)', fontWeight: 400, margin: '0 6px' }}>vs</span> {match.opponent}
           </div>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 52, fontWeight: 700, letterSpacing: '-2px', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-            <span style={{ color: match.result !== 'loss' ? 'var(--text-primary)' : 'rgba(230,237,243,0.5)' }}>{match.goals_scored}</span>
+            <span style={{ color: match.result !== 'loss' ? 'var(--text-primary)' : 'rgba(241,245,249,0.5)' }}>{match.goals_scored}</span>
             <span style={{ color: 'var(--text-muted)', margin: '0 10px', fontWeight: 300, fontSize: 36 }}>–</span>
-            <span style={{ color: match.result === 'loss' ? 'rgba(248,81,73,0.7)' : 'rgba(230,237,243,0.35)' }}>{match.goals_conceded}</span>
+            <span style={{ color: match.result === 'loss' ? 'rgba(248,81,73,0.7)' : 'rgba(241,245,249,0.35)' }}>{match.goals_conceded}</span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, letterSpacing: '0.06em' }}>
             {dateStr} · {match.stadium || (isHome ? 'Home' : 'Away')} · {isHome ? 'HOME' : 'AWAY'}
@@ -139,7 +138,7 @@ function PpdaTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const m = payload[0].payload;
   return (
-    <div style={{ background: '#1C2333', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '7px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}>
+    <div style={{ background: 'var(--surface2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '7px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>vs {m.opponent}</div>
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
         PPDA {m.ppda.toFixed(1)} · {new Date(m.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
@@ -203,7 +202,7 @@ function SeasonSnapshotCard({ teamInfo, topPerformers, positionByPlayerId, match
   const ppda = teamInfo?.season_ppda_avg;
   const tilt = teamInfo?.season_field_tilt_avg;
   return (
-    <div style={{ background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '20px 22px 22px', flex: '0 0 340px' }}>
+    <div style={{ background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '20px 22px 22px', flex: '0 0 340px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <div style={{ width: 3, height: 18, background: ACC, borderRadius: 2 }} />
         <div style={{ fontFamily: 'Space Grotesk', fontSize: 15, fontWeight: 600 }}>Season Snapshot</div>
@@ -326,7 +325,7 @@ export default function Dashboard() {
           <>
             <div style={{ display: 'flex', gap: 18, marginBottom: 24, flexWrap: 'wrap' }}>
               {[0, 1, 2].map(i => (
-                <div key={i} style={{ background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '24px 26px', flex: 1, minWidth: 220 }}>
+                <div key={i} style={{ background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '24px 26px', flex: 1, minWidth: 220 }}>
                   <Skeleton width={100} height={11} style={{ marginBottom: 14 }} />
                   <Skeleton width={140} height={42} style={{ marginBottom: 8 }} />
                   <Skeleton width={180} height={12} />
@@ -334,12 +333,12 @@ export default function Dashboard() {
               ))}
             </div>
             <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-              <div style={{ background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '20px 24px', flex: '0 0 340px' }}>
+              <div style={{ background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '20px 24px', flex: '0 0 340px' }}>
                 <Skeleton width={90} height={11} style={{ marginBottom: 18 }} />
                 <Skeleton width={160} height={16} style={{ margin: '0 auto 14px' }} />
                 <Skeleton width={120} height={44} style={{ margin: '0 auto' }} />
               </div>
-              <div style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 20 }}>
+              <div style={{ flex: 1, background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 20 }}>
                 {[0, 1, 2, 3, 4].map(i => <Skeleton key={i} height={38} style={{ marginBottom: 10 }} />)}
               </div>
             </div>
@@ -396,7 +395,7 @@ export default function Dashboard() {
                 <SeasonSnapshotCard teamInfo={teamInfo} topPerformers={topPerformers} positionByPlayerId={positionByPlayerId} matches={matches} />
               </div>
 
-              <div style={{ flex: 1, minWidth: 0, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden' }}>
+              <div style={{ flex: 1, minWidth: 0, background: 'linear-gradient(145deg, var(--surface2) 0%, var(--bg-surface) 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden' }}>
                 <div style={{ padding: '20px 20px 0', minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, minWidth: 0 }}>
                     <div style={{ width: 3, height: 18, background: ACC, borderRadius: 2, flexShrink: 0 }} />

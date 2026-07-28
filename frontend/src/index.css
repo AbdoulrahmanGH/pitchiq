@@ -1,19 +1,31 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0D1117;
-  --surface: #161B22;
-  --surface2: #1C2333;
-  --surface3: #21262D;
-  --border: rgba(255,255,255,0.07);
-  --orange: #FF6B35;
-  --orange-dim: rgba(255,107,53,0.12);
-  --orange-glow: rgba(255,107,53,0.35);
-  --text-primary: #E6EDF3;
-  --text-secondary: #8B949E;
-  --text-muted: #6E7681;
-  --green: #3FB950;
-  --green-dim: rgba(63,185,80,0.12);
+  /* Design tokens -- the source of truth for the app's palette. Everything
+     below is either one of these seven or derived from one, so a future
+     palette change only has to happen here. */
+  --bg-main: #0B0E14;
+  --bg-surface: #141824;
+  --border-color: #23293A;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --accent-orange: #FF5A1F;
+  --stat-green: #10B981;
+
+  /* Legacy names kept so existing var(--x) references (all across the app)
+     inherit the new palette without a mechanical rename of every call
+     site. New code should prefer the named tokens above directly. */
+  --bg: var(--bg-main);
+  --surface: var(--bg-surface);
+  --surface2: #1A2030;
+  --surface3: #232A3A;
+  --border: var(--border-color);
+  --orange: var(--accent-orange);
+  --orange-dim: rgba(255,90,31,0.12);
+  --orange-glow: rgba(255,90,31,0.35);
+  --text-muted: #64748B;
+  --green: var(--stat-green);
+  --green-dim: rgba(16,185,129,0.12);
   --red: #F85149;
   --red-dim: rgba(248,81,73,0.12);
   --yellow: #D29922;
@@ -58,11 +70,11 @@ html, body, #root {
 /* Players table scrollbar — always visible, orange on dark track */
 .table-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #FF6B35 #161B22;
+  scrollbar-color: var(--accent-orange) var(--bg-surface);
 }
 .table-scroll::-webkit-scrollbar { height: 6px; }
-.table-scroll::-webkit-scrollbar-track { background: #161B22; border-radius: 3px; }
-.table-scroll::-webkit-scrollbar-thumb { background: #FF6B35; border-radius: 3px; }
+.table-scroll::-webkit-scrollbar-track { background: var(--bg-surface); border-radius: 3px; }
+.table-scroll::-webkit-scrollbar-thumb { background: var(--accent-orange); border-radius: 3px; }
 .table-scroll::-webkit-scrollbar-thumb:hover { background: #ff8c5a; }
 
 /* Actual table body — scrollable but bottom scrollbar hidden (top mirror handles it) */

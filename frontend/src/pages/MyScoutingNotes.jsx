@@ -4,7 +4,7 @@ import { getScoutingNotes } from '../services/api';
 import { SCOUTING_RATING_LABELS } from '../constants';
 import Skeleton from '../components/Skeleton';
 
-const ACC = '#FF6B35';
+const ACC = '#FF5A1F';
 
 export default function MyScoutingNotes() {
   const { role } = useAuth();

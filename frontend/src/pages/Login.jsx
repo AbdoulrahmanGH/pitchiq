@@ -76,7 +76,7 @@ function Spinner() {
   return (
     <span style={{
       width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-      border: '3px solid rgba(255,107,53,0.2)', borderTopColor: 'var(--orange)',
+      border: '3px solid rgba(255,90,31,0.2)', borderTopColor: 'var(--orange)',
       animation: 'login-spin 0.8s linear infinite', display: 'inline-block',
     }} />
   );

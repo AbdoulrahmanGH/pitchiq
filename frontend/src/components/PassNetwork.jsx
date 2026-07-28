@@ -4,7 +4,7 @@ import TeamToggle from './TeamToggle';
 import Skeleton from './Skeleton';
 import { getPassNetwork } from '../services/api';
 
-const ACC = '#FF6B35';
+const ACC = '#FF5A1F';
 
 // Node radius in pitch units, gently scaled by completed-pass volume so the
 // hub players read as hubs without swallowing the pitch.
@@ -128,7 +128,7 @@ function HoverTip({ hover, nodesById }) {
   // position relative to the svg wrapper using the last mouse event coords
   const wrapper = { position: 'absolute', top: 6, left: 6, pointerEvents: 'none' };
   const box = {
-    display: 'inline-block', background: 'var(--surface3, #1C2333)',
+    display: 'inline-block', background: 'var(--surface3)',
     border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8,
     padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
   };

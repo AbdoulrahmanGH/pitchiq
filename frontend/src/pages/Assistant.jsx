@@ -10,7 +10,7 @@ import Lottie from 'lottie-react/build/index.es.js';
 import { askAssistant } from '../services/api';
 import robotAnimation from '../assets/robot-assistant.json';
 
-const ACC = '#FF6B35';
+const ACC = '#FF5A1F';
 
 const PROMPT_CHIPS = [
   'Rank Barcelona players by Xg this season',
@@ -75,7 +75,7 @@ function WelcomeScreen({ onPick }) {
               maxWidth: 220, cursor: 'pointer', textAlign: 'left', lineHeight: 1.4,
               transition: 'background 0.15s, border-color 0.15s, color 0.15s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,107,53,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,107,53,0.25)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,90,31,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,90,31,0.25)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.09)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
           >
             {q}
@@ -200,7 +200,7 @@ export default function Assistant() {
             padding: '0 18px',
             borderRadius: 10,
             border: 'none',
-            background: (!input.trim() || loading) ? 'rgba(255,107,53,0.3)' : ACC,
+            background: (!input.trim() || loading) ? 'rgba(255,90,31,0.3)' : ACC,
             color: '#fff',
             fontSize: 13,
             fontWeight: 600,
