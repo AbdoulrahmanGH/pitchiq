@@ -396,17 +396,17 @@ export default function Dashboard() {
                 <SeasonSnapshotCard teamInfo={teamInfo} topPerformers={topPerformers} positionByPlayerId={positionByPlayerId} matches={matches} />
               </div>
 
-              <div style={{ flex: 1, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden' }}>
-                <div style={{ padding: '20px 20px 0' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <div style={{ width: 3, height: 18, background: ACC, borderRadius: 2 }} />
-                    <div style={{ fontFamily: 'Space Grotesk', fontSize: 15, fontWeight: 600 }}>Recent Form</div>
-                    <div style={{ display: 'flex', gap: 5, marginLeft: 'auto' }}>
+              <div style={{ flex: 1, minWidth: 0, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, overflow: 'hidden' }}>
+                <div style={{ padding: '20px 20px 0', minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, minWidth: 0 }}>
+                    <div style={{ width: 3, height: 18, background: ACC, borderRadius: 2, flexShrink: 0 }} />
+                    <div style={{ fontFamily: 'Space Grotesk', fontSize: 15, fontWeight: 600, flexShrink: 0 }}>Recent Form</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginLeft: 'auto', justifyContent: 'flex-end', minWidth: 0 }}>
                       {[...matches].sort((a, b) => new Date(a.date) - new Date(b.date)).map((m, i) => {
                         const c  = m.result === 'win' ? 'var(--green)' : m.result === 'draw' ? 'var(--yellow)' : 'var(--red)';
                         const bg = m.result === 'win' ? 'var(--green-dim)' : m.result === 'draw' ? 'var(--yellow-dim)' : 'var(--red-dim)';
                         const lbl = m.result === 'win' ? 'W' : m.result === 'draw' ? 'D' : 'L';
-                        return <div key={i} style={{ width: 22, height: 22, borderRadius: 5, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: c }}>{lbl}</div>;
+                        return <div key={i} style={{ width: 22, height: 22, borderRadius: 5, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: c, flexShrink: 0 }}>{lbl}</div>;
                       })}
                     </div>
                   </div>
