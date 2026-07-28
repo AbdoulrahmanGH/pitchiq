@@ -163,61 +163,6 @@ function RunHistory({ runs }) {
   );
 }
 
-const FLOW_LINE = { width: 1, height: 16, background: `linear-gradient(180deg, ${ACC}44, ${ACC})`, margin: '0 auto' };
-const FLOW_ARROW = { width: 0, height: 0, margin: '0 auto', borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: `6px solid ${ACC}` };
-
-function FlowNode({ title, sub, wide }) {
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
-      borderRadius: 10, padding: '10px 16px', width: wide ? '100%' : 'auto',
-      textAlign: 'center',
-    }}>
-      <div style={{ fontFamily: 'Space Grotesk', fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</div>
-      {sub && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{sub}</div>}
-    </div>
-  );
-}
-
-function ArchitectureDiagram() {
-  return (
-    <Card style={{ padding: '28px 32px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <FlowNode title="StatsBomb open data" sub="raw JSON source" />
-        <div style={FLOW_LINE} /><div style={FLOW_ARROW} />
-        <FlowNode title="GCS raw landing zone" sub="pitchiq-v2-statsbomb-raw, run-scoped prefix" />
-        <div style={FLOW_LINE} /><div style={FLOW_ARROW} />
-        <FlowNode title="Transform (pandas)" sub="extract → transform, pipeline_v2.py" />
-        <div style={FLOW_LINE} /><div style={FLOW_ARROW} />
-
-        <div style={{ display: 'flex', gap: 20, width: '100%', marginTop: 2 }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-            <FlowNode title="Postgres (Supabase)" sub="source of truth · load + quality checks" wide />
-          </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-            <FlowNode title="BigQuery mirror" sub="matches, player_match_stats, team_match_stats" wide />
-            <div style={FLOW_LINE} /><div style={FLOW_ARROW} />
-            <FlowNode title="Analytics queries" sub="season rankings · rolling xG trend (RANK / ROWS BETWEEN)" wide />
-            <div style={FLOW_LINE} /><div style={FLOW_ARROW} />
-            <FlowNode title="analytics_cache" sub="written back into Postgres" wide />
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', width: '100%', marginTop: 4 }}>
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}><div style={FLOW_LINE} /></div>
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}><div style={FLOW_LINE} /></div>
-        </div>
-        <div style={FLOW_ARROW} />
-
-        <FlowNode title="FastAPI on Cloud Run" sub="reads Postgres directly, reads analytics_cache for /api/analytics/*" wide />
-        <div style={FLOW_LINE} /><div style={FLOW_ARROW} />
-        <FlowNode title="React dashboard" sub="Netlify" />
-      </div>
-    </Card>
-  );
-}
-
 const POLL_INTERVAL_MS = 4000;
 const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -283,7 +228,7 @@ export default function Pipeline() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', minHeight: 60, borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,17,23,0.7)', backdropFilter: 'blur(12px)', flexShrink: 0, gap: 8 }}>
         <div>
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 600 }}>Pipeline Visibility</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Data freshness, run history, and how it all actually flows</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>A behind-the-scenes look at how up to date your squad data is</div>
         </div>
         {role === 'analyst' && status && !error && (
           <RefreshButton onClick={handleRefresh} refreshing={refreshing} />
@@ -328,10 +273,6 @@ export default function Pipeline() {
 
               <Section title="Run History">
                 <RunHistory runs={status.recent_runs} />
-              </Section>
-
-              <Section title="Architecture">
-                <ArchitectureDiagram />
               </Section>
             </>
           )}

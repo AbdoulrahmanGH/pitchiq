@@ -1,12 +1,15 @@
 const ACC = '#FF6B35';
 
+// Plain-language version of the pipeline, for a general audience -- the
+// full engineer-facing version (raw JSON, GCS, BigQuery mirror, Cloud Run,
+// etc.) lives only in the Pipeline Visibility page's own docs/comments now,
+// not surfaced to anyone reading About as a non-technical overview.
 const ARCH_STEPS = [
-  { label: 'Raw JSON', sub: 'StatsBomb-inspired format' },
-  { label: 'pipeline.py', sub: 'extract → transform → load' },
-  { label: 'PostgreSQL / Supabase', sub: 'club-owned storage' },
-  { label: 'FastAPI on GCP Cloud Run', sub: 'API layer' },
-  { label: 'React on Netlify', sub: 'dashboard' },
-  { label: 'BigQuery', sub: 'analytical warehouse' },
+  { label: 'Match data comes in', sub: 'Raw stats from every game are collected automatically' },
+  { label: 'Cleaned and organized', sub: 'Checked for errors and structured for analysis' },
+  { label: 'Stored securely', sub: 'Kept in a database the club owns and controls' },
+  { label: 'Turned into insights', sub: 'Fatigue risk, form, and performance trends are calculated' },
+  { label: 'Shown on the dashboard', sub: 'Coaches and analysts see it instantly, no spreadsheets required' },
 ];
 
 const TECH_CHOICES = [
@@ -102,7 +105,7 @@ export default function About() {
             </Card>
           </Section>
 
-          <Section title="Architecture">
+          <Section title="How it works">
             <Card style={{ padding: '28px 32px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
                 {ARCH_STEPS.map((step, i) => (
