@@ -144,6 +144,27 @@ def test_classify_intent_threads_context_into_the_llm_call():
     assert "Recent conversation" in user_message and "yes" in user_message
 
 
+@pytest.mark.parametrize("question", [
+    "Who's a good replacement for Suárez?",
+    "Who's a good replacement for Suarez?",
+    "Who could we sign instead of Messi?",
+    "Who's similar to Messi in playing style?",
+    "Can you recommend a replacement for our striker?",
+    "What's a good alternative to Suarez?",
+])
+def test_classify_intent_declines_recommendation_questions_without_calling_llm(question):
+    # Recommendation/similarity questions must be declined before any LLM
+    # call -- and, more importantly, before name resolution ever runs. Left
+    # to the LLM classifier, a question naming a real player ("...for
+    # Suárez") risks being misclassified into player_performance or
+    # player_comparison, which would resolve his name and answer a narrower
+    # question (his own stats) than what was actually asked.
+    mock_client = MagicMock()
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_client):
+        assert classify_intent(question) is None
+    mock_client.chat.completions.create.assert_not_called()
+
+
 # ----------------------- resolve_player_names (LLM + fallback) -----------------------
 
 SAMPLE_PLAYERS = [
@@ -352,6 +373,19 @@ def test_out_of_scope_question_returns_role_message_without_fetching_or_answerin
     assert result == out_of_scope_message("analyst")
     mock_fetch.assert_not_called()
     assert mock_groq_client.chat.completions.create.call_count == 1
+
+
+def test_recommendation_question_naming_a_real_player_is_declined_without_name_resolution():
+    # Regression test: "who's a good replacement for Suárez" must decline on
+    # the first message rather than resolving "Suárez" and answering his own
+    # stats (a narrower question than what was actually asked).
+    with patch("app.services.ai_service.resolve_player_names") as mock_resolve, \
+         patch("app.services.ai_service.get_groq_client") as mock_get_groq:
+        result = answer_question("Who's a good replacement for Suárez?", MagicMock(), ANALYST_USER)
+
+    assert result == out_of_scope_message("analyst")
+    mock_resolve.assert_not_called()
+    mock_get_groq.assert_not_called()
 
 
 def test_readiness_question_summarizes_real_fetched_data_via_groq():

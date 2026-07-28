@@ -13,8 +13,7 @@ import robotAnimation from '../assets/robot-assistant.json';
 const ACC = '#FF6B35';
 
 const PROMPT_CHIPS = [
-  "Who's at risk of fatigue right now?",
-  'Is the squad ready for the next match?',
+  'Rank Barcelona players by Xg this season',
   'Show me all available midfielders',
 ];
 

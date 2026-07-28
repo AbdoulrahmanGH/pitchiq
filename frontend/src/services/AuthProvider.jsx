@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { setAuthToken, getWhoAmI } from './api';
 
@@ -15,11 +15,17 @@ export function AuthProvider({ children }) {
   // during that window as "no role" (which used to render the full,
   // unscoped nav for a flash) -- they need to know a resolution is in flight.
   const [roleLoading, setRoleLoading] = useState(true);
+  // Tracks the user id the app has actually resolved into state, so the
+  // onAuthStateChange handler below can tell "the user changed" apart from
+  // "Supabase re-fired SIGNED_IN for the same user" (which happens on every
+  // browser tab refocus). Only the latter should be a no-op.
+  const currentUserIdRef = useRef(undefined);
 
   useEffect(() => {
     let mounted = true;
 
     async function applySession(newSession) {
+      currentUserIdRef.current = newSession?.user?.id ?? null;
       setSession(newSession);
       setAuthToken(newSession?.access_token ?? null);
 
@@ -45,6 +51,15 @@ export function AuthProvider({ children }) {
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      const incomingUserId = newSession?.user?.id ?? null;
+      if (incomingUserId === currentUserIdRef.current) {
+        // Same user as already resolved -- e.g. a refocus-triggered SIGNED_IN
+        // with no real change. Keep the access token current (it may have
+        // rotated) without cascading a state update through role/session
+        // consumers like the sidebar.
+        setAuthToken(newSession?.access_token ?? null);
+        return;
+      }
       applySession(newSession);
     });
 

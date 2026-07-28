@@ -369,7 +369,32 @@ def _classify_intent_by_keywords(question: str) -> Optional[str]:
     return None
 
 
+# Matches "replacement for X", "similar to X", "instead of X", "who could/
+# should we sign", etc. These are recommendation/similarity asks -- the
+# assistant only reports on data it has, it doesn't judge who'd be a good
+# fit -- and they must be declined outright rather than routed into name
+# resolution. A question like "who's a good replacement for Suárez" mentions
+# a real player, so left unchecked it gets misclassified into a category
+# (player_performance, player_comparison, ...) that resolves his name and
+# answers a narrower question than what was asked.
+_RECOMMENDATION_OR_SIMILARITY_PATTERNS = [
+    re.compile(r"\breplacement(?:s)?\s+for\b", re.I),
+    re.compile(r"\breplace\b", re.I),
+    re.compile(r"\bsimilar\s+(?:to|player)", re.I),
+    re.compile(r"\balternative(?:s)?\s+(?:to|for)\b", re.I),
+    re.compile(r"\binstead\s+of\b", re.I),
+    re.compile(r"\bwho\s+(?:should|could)\s+we\s+sign\b", re.I),
+    re.compile(r"\brecommend", re.I),
+]
+
+
+def _is_recommendation_or_similarity_question(question: str) -> bool:
+    return any(p.search(question) for p in _RECOMMENDATION_OR_SIMILARITY_PATTERNS)
+
+
 def classify_intent(question: str, context: Optional[str] = None) -> Optional[str]:
+    if _is_recommendation_or_similarity_question(question):
+        return None
     try:
         return _classify_intent_via_llm(question, context=context)
     except Exception as exc:
