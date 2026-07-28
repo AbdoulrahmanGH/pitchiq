@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../services/AuthProvider';
 import { getScoutingNotes } from '../services/api';
 import { SCOUTING_RATING_LABELS } from '../constants';
+import Skeleton from '../components/Skeleton';
 
 const ACC = '#FF6B35';
 
@@ -43,7 +44,20 @@ export default function MyScoutingNotes() {
         )}
 
         {role === 'scout' && loading && (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading your notes...</div>
+          <div style={{ borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.15)' }}>
+              <Skeleton width={60} height={9} />
+            </div>
+            {[0, 1, 2, 3, 4, 5].map(i => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <Skeleton width={130} height={13} />
+                <Skeleton width={90} height={12} />
+                <Skeleton width={40} height={13} />
+                <Skeleton width={220} height={12} style={{ flex: 1 }} />
+                <Skeleton width={70} height={11} />
+              </div>
+            ))}
+          </div>
         )}
 
         {role === 'scout' && error && (

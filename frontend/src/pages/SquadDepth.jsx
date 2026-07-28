@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip } from 
 import { getSquadDepth, getFatigueRisk, getTeamReadiness, getPlayerStatuses, postPlayerStatus } from '../services/api';
 import { useAuth } from '../services/AuthProvider';
 import CircularProgress from '../components/CircularProgress';
+import Skeleton from '../components/Skeleton';
 
 const ACC = '#FF6B35';
 
@@ -230,10 +231,39 @@ export default function SquadDepth() {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 48px', minWidth: 0 }}>
         {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, height: 200, color: '#8B949E', fontSize: 13 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: ACC, animation: 'pulse 1.2s ease-in-out infinite' }} />
-            Loading squad depth...
-          </div>
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 22, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '20px 24px', marginBottom: 24 }}>
+              <Skeleton width={64} height={64} radius={'50%'} />
+              <div style={{ flex: 1 }}>
+                <Skeleton width={130} height={11} style={{ marginBottom: 10 }} />
+                <Skeleton width={220} height={12} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} style={{ flex: 1, minWidth: 140, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px' }}>
+                  <Skeleton width={40} height={10} style={{ marginBottom: 12 }} />
+                  <Skeleton width={50} height={38} style={{ marginBottom: 8 }} />
+                  <Skeleton width={90} height={11} />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '28px 32px', marginBottom: 24 }}>
+              <Skeleton width={180} height={13} style={{ marginBottom: 24 }} />
+              {[0, 1, 2, 3].map(i => <Skeleton key={i} height={22} style={{ marginBottom: 14 }} />)}
+            </div>
+
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} style={{ flex: 1, minWidth: 220, background: 'linear-gradient(145deg, #1C2333 0%, #161B22 100%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '18px 20px 20px' }}>
+                  <Skeleton width={60} height={38} style={{ marginBottom: 16 }} />
+                  {[0, 1, 2].map(j => <Skeleton key={j} height={22} style={{ marginBottom: 8 }} />)}
+                </div>
+              ))}
+            </div>
+          </>
         )}
         {error   && <div style={{ padding: '16px 20px', background: 'var(--red-dim)', border: '1px solid rgba(248,81,73,0.2)', borderRadius: 12, color: 'var(--red)', fontSize: 13 }}>Failed to load: {error}</div>}
 
