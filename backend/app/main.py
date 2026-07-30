@@ -15,6 +15,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "https://pitchiqdata.netlify.app",
+        "https://v2-dev--pitchiqdata.netlify.app",
     ],
     allow_methods=["*"],
     allow_headers=["*"],

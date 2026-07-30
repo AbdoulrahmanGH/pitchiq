@@ -42,8 +42,8 @@ const BQ_QUERIES = [
 ];
 
 const LINKS = [
-  { label: 'API', href: 'https://pitchiq-backend-787059661234.europe-west1.run.app' },
-  { label: 'API Docs', href: 'https://pitchiq-backend-787059661234.europe-west1.run.app/docs' },
+  { label: 'API', href: 'https://pitchiq-backend-v2-787059661234.europe-west1.run.app' },
+  { label: 'API Docs', href: 'https://pitchiq-backend-v2-787059661234.europe-west1.run.app/docs' },
   { label: 'GitHub', href: 'https://github.com/AbdoulrahmanGH/pitchiq/' },
 ];
 
