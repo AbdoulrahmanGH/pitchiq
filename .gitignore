@@ -10,6 +10,10 @@ backend/app/data/output/
 .agents/
 skills-lock.json
 
+
+# Ignore all documentation
+docs/
+
 # Local planning/status docs and reference material, not for a shipped codebase
 CODEBASE_AUDIT.md
 docs/MOCK_QA.md

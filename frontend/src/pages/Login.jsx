@@ -10,9 +10,9 @@ import { useAuth } from '../services/AuthProvider';
 // one-click demo buttons exists for fast role-switching while testing and
 // for the interview demo -- it must NOT ship in a real production build.
 const DEMO_ACCOUNTS = [
-  { label: 'Demo: Analyst', roleLabel: 'Analyst', email: 'analyst@example.com', password: 'Analyst123!' },
-  { label: 'Demo: Coach',   roleLabel: 'Coach',   email: 'coach@example.com',   password: 'Coach123!' },
-  { label: 'Demo: Scout',   roleLabel: 'Scout',   email: 'scout@example.com',   password: 'Scout123!' },
+  { label: 'Analyst', roleLabel: 'Analyst', email: 'analyst@example.com', password: 'Analyst123!' },
+  { label: 'Coach',   roleLabel: 'Coach',   email: 'coach@example.com',   password: 'Coach123!' },
+  { label: 'Scout',   roleLabel: 'Scout',   email: 'scout@example.com',   password: 'Scout123!' },
 ];
 
 const ROLE_DISPLAY = { analyst: 'Analyst', coach: 'Coach', scout: 'Scout' };
@@ -178,7 +178,7 @@ export default function Login() {
       {/* Dev-only quick login -- remove before any real production build. */}
       <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
         <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 10 }}>
-          Dev quick login (seeded demo accounts):
+          Dev quick login:
         </p>
         {DEMO_ACCOUNTS.map((acct) => (
           <button

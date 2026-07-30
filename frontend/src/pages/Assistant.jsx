@@ -13,7 +13,7 @@ import robotAnimation from '../assets/robot-assistant.json';
 const ACC = '#FF5A1F';
 
 const PROMPT_CHIPS = [
-  'Rank Barcelona players by Xg this season',
+  'Rank Barcelona players by xG this season',
   'Show me all available midfielders',
 ];
 
