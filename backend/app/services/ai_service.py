@@ -11,6 +11,7 @@ full design.
 
 import json
 import logging
+import random
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -101,6 +102,95 @@ INJECTION_REFUSAL_MESSAGE = (
 FALLBACK_MESSAGE = "The assistant is temporarily unavailable. Please try again shortly."
 
 
+# Equivalent phrasings for the generic out-of-scope/capability decline,
+# rotated so repeated declines in one conversation don't read as a single
+# frozen string. Purely cosmetic -- all three carry the same information.
+OUT_OF_SCOPE_TEMPLATES = [
+    "I can help with {topics} questions. What would you like to know?",
+    "I'm set up to answer questions about {topics}. What would you like to ask?",
+    "My scope covers {topics} questions. What can I look up for you?",
+]
+
+GREETING_MESSAGE = (
+    "I'm PitchIQ's assistant -- I can help with squad readiness, performance, "
+    "and scouting questions using real match data. What would you like to know?"
+)
+
+_GREETING_PATTERNS = [
+    re.compile(r"^\s*(hi|hello|hey|hiya|yo|howdy)(\s+(there|team|guys|everyone))?[\s!.,]*$", re.I),
+    re.compile(r"\bwho are you\b", re.I),
+    re.compile(r"\bwhat are you\b", re.I),
+    re.compile(r"\bwhat can you do\b", re.I),
+    re.compile(r"\bwhat do you do\b", re.I),
+    re.compile(r"\bhow can you help\b", re.I),
+    re.compile(r"\bwhat is this\b", re.I),
+]
+
+OUT_OF_SCOPE_SEASON_MESSAGE = "I only have data from the 2015/16 La Liga season right now."
+
+# 2015/16 La Liga is the only season loaded -- these catch explicit
+# references to any other year, shorthand season, relative season, or
+# competition so the assistant declines with the real scope instead of
+# either fabricating an answer or giving the generic capability decline.
+_SUPPORTED_YEARS = {"2015", "2016"}
+_YEAR_PATTERN = re.compile(r"\b(?:19|20)\d{2}\b")
+_SEASON_SHORTHAND_PATTERN = re.compile(r"\b(\d{2})/(\d{2})\b")
+_SUPPORTED_SHORTHAND = {"15", "16"}
+_RELATIVE_SEASON_PATTERNS = [
+    re.compile(r"\blast season\b", re.I),
+    re.compile(r"\bnext season\b", re.I),
+]
+_OTHER_COMPETITION_PATTERNS = [
+    re.compile(r"\bpremier league\b", re.I),
+    re.compile(r"\bchampions league\b", re.I),
+    re.compile(r"\beuropa league\b", re.I),
+    re.compile(r"\bbundesliga\b", re.I),
+    re.compile(r"\bserie a\b", re.I),
+    re.compile(r"\bligue 1\b", re.I),
+    re.compile(r"\bworld cup\b", re.I),
+    re.compile(r"\bcopa (del rey|america|libertadores)\b", re.I),
+    re.compile(r"\bsupercopa\b", re.I),
+    re.compile(r"\bmls\b", re.I),
+]
+
+WRITE_ACTION_DECLINE_MESSAGE = "I can only look things up, I can't make changes."
+
+# The assistant has zero write-capable tools -- these catch phrasing that
+# asks it to mutate data so it declines cleanly instead of being routed
+# into an unrelated read-only category (e.g. "status") by the classifier.
+_WRITE_ACTION_PATTERNS = [
+    re.compile(r"\b(add|insert|create|log|write|save|record)\s+(?:a\s+|an\s+|the\s+)?(note|entry|record)\b", re.I),
+    re.compile(r"\bupdate\s+(?:the\s+)?(database|status|record)\b", re.I),
+    re.compile(r"\b(delete|remove)\s+(?:the\s+)?(note|record|player|entry)\b", re.I),
+    re.compile(r"\b(add|remove)\s+\S+\s+(?:from|to)\s+the\s+(roster|squad|team)\b", re.I),
+    re.compile(r"\bmark\s+\S+(?:\s+\S+){0,2}\s+as\s+(injured|available|doubtful|unavailable)\b", re.I),
+    re.compile(r"\bset\s+\S+(?:'s)?\s*status\s+to\b", re.I),
+    re.compile(r"\bchange\s+(?:the\s+)?status\b", re.I),
+]
+
+
+def _is_greeting_or_identity_question(question: str) -> bool:
+    return any(p.search(question) for p in _GREETING_PATTERNS)
+
+
+def _is_out_of_scope_season_or_competition_question(question: str) -> bool:
+    if any(p.search(question) for p in _OTHER_COMPETITION_PATTERNS):
+        return True
+    if any(p.search(question) for p in _RELATIVE_SEASON_PATTERNS):
+        return True
+    years = _YEAR_PATTERN.findall(question)
+    if years and not set(years) <= _SUPPORTED_YEARS:
+        return True
+    for a, b in _SEASON_SHORTHAND_PATTERN.findall(question):
+        if a not in _SUPPORTED_SHORTHAND or b not in _SUPPORTED_SHORTHAND:
+            return True
+    return False
+
+
+def _is_write_action_request(question: str) -> bool:
+    return any(p.search(question) for p in _WRITE_ACTION_PATTERNS)
+
+
 def out_of_scope_message(role: str) -> str:
     topics = [CATEGORY_DESCRIPTIONS[c] for c in CATEGORY_KEYWORDS if c in ROLE_ALLOWED_CATEGORIES.get(role, set())]
     if not topics:
@@ -113,7 +203,26 @@ def out_of_scope_message(role: str) -> str:
     else:
         topic_str = ", ".join(topics[:-1]) + f", and {topics[-1]}"
 
-    return f"I can help with {topic_str} questions. What would you like to know?"
+    return random.choice(OUT_OF_SCOPE_TEMPLATES).format(topics=topic_str)
+
+
+def out_of_scope_message_variants(role: str) -> list:
+    """All possible out_of_scope_message(role) outputs -- for tests that
+    need to assert membership rather than equality against a second,
+    independently-rotated call.
+    """
+    topics = [CATEGORY_DESCRIPTIONS[c] for c in CATEGORY_KEYWORDS if c in ROLE_ALLOWED_CATEGORIES.get(role, set())]
+    if not topics:
+        topics = ["squad data"]
+
+    if len(topics) == 1:
+        topic_str = f"{topics[0]}"
+    elif len(topics) == 2:
+        topic_str = f"{topics[0]} and {topics[1]}"
+    else:
+        topic_str = ", ".join(topics[:-1]) + f", and {topics[-1]}"
+
+    return [template.format(topics=topic_str) for template in OUT_OF_SCOPE_TEMPLATES]
 
 
 SYSTEM_PROMPT = """You are PitchIQ's football operations assistant, an internal \
@@ -499,6 +608,15 @@ def answer_question(
     question: str, client, user, previous_question: Optional[str] = None,
     previous_answer: Optional[str] = None,
 ) -> str:
+    if _is_greeting_or_identity_question(question):
+        return GREETING_MESSAGE
+
+    if _is_out_of_scope_season_or_competition_question(question):
+        return OUT_OF_SCOPE_SEASON_MESSAGE
+
+    if _is_write_action_request(question):
+        return WRITE_ACTION_DECLINE_MESSAGE
+
     context = build_context(previous_question, previous_answer)
     category = classify_intent(question, context=context)
     if category is None:

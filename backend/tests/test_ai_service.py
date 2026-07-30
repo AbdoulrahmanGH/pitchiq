@@ -13,13 +13,20 @@ from app.services.ai_service import (
     CATEGORY_DESCRIPTIONS,
     CATEGORY_KEYWORDS,
     FALLBACK_MESSAGE,
+    GREETING_MESSAGE,
+    OUT_OF_SCOPE_SEASON_MESSAGE,
     PLAYER_NOT_FOUND_MESSAGE,
     ROLE_ALLOWED_CATEGORIES,
+    WRITE_ACTION_DECLINE_MESSAGE,
     _classify_intent_by_keywords,
+    _is_greeting_or_identity_question,
+    _is_out_of_scope_season_or_competition_question,
+    _is_write_action_request,
     _resolve_player_names_by_substring,
     answer_question,
     classify_intent,
     out_of_scope_message,
+    out_of_scope_message_variants,
     resolve_player_names,
 )
 
@@ -359,6 +366,129 @@ def test_out_of_scope_messages_differ_across_roles():
     assert len(set(messages.values())) == 3
 
 
+def test_out_of_scope_message_rotates_across_calls():
+    # Not deterministic by nature, but with 3 templates, 50 calls should
+    # surface more than one phrasing essentially always.
+    messages = {out_of_scope_message("analyst") for _ in range(50)}
+
+    assert len(messages) > 1
+
+
+# ----------------------------- greeting / identity -----------------------------
+
+@pytest.mark.parametrize("question", [
+    "hi",
+    "Hi!",
+    "hello",
+    "hey there",
+    "who are you",
+    "Who are you?",
+    "what can you do",
+    "What can you do?",
+    "what do you do",
+    "how can you help",
+])
+def test_greeting_or_identity_questions_are_detected(question):
+    assert _is_greeting_or_identity_question(question)
+
+
+@pytest.mark.parametrize("question", [
+    "Is the squad ready for Saturday?",
+    "How is Messi performing this season?",
+    "hiya, is the squad fit for Saturday?",  # "hiya" only matches standalone greetings
+])
+def test_non_greeting_questions_are_not_detected_as_greetings(question):
+    assert not _is_greeting_or_identity_question(question)
+
+
+def test_greeting_returns_canned_message_without_any_groq_call():
+    mock_groq_client = MagicMock()
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+        result = answer_question("hi", MagicMock(), ANALYST_USER)
+
+    assert result == GREETING_MESSAGE
+    mock_groq_client.chat.completions.create.assert_not_called()
+
+
+def test_who_are_you_returns_canned_message_without_any_groq_call():
+    mock_groq_client = MagicMock()
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+        result = answer_question("Who are you?", MagicMock(), ANALYST_USER)
+
+    assert result == GREETING_MESSAGE
+    mock_groq_client.chat.completions.create.assert_not_called()
+
+
+# ----------------------- out-of-scope season / competition -----------------------
+
+@pytest.mark.parametrize("question", [
+    "How did Barcelona do in the 2021/22 season?",
+    "What about 2020?",
+    "How did we do in the Premier League?",
+    "Show me our Champions League results",
+    "What happened last season?",
+    "What's the plan for next season?",
+    "How did we do in 21/22?",
+])
+def test_out_of_scope_season_or_competition_questions_are_detected(question):
+    assert _is_out_of_scope_season_or_competition_question(question)
+
+
+@pytest.mark.parametrize("question", [
+    "How is Messi performing this season?",
+    "Compare Messi and Suarez this season",
+    "What was the result of our last match?",
+    "How did we do in 2015/16?",
+    "How did we do in 15/16?",
+])
+def test_in_scope_season_questions_are_not_flagged(question):
+    assert not _is_out_of_scope_season_or_competition_question(question)
+
+
+def test_out_of_scope_season_question_returns_fixed_message_without_any_groq_call():
+    mock_groq_client = MagicMock()
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+        result = answer_question("How did we do in the 2021/22 season?", MagicMock(), ANALYST_USER)
+
+    assert result == OUT_OF_SCOPE_SEASON_MESSAGE
+    mock_groq_client.chat.completions.create.assert_not_called()
+
+
+# ----------------------------- write-action decline -----------------------------
+
+@pytest.mark.parametrize("question", [
+    "Add a note about Messi's finishing",
+    "Log a note for Suarez",
+    "Can you update the database with his new status?",
+    "Delete the note about Busquets",
+    "Remove Messi from the roster",
+    "Mark Messi as injured",
+    "Set Messi's status to doubtful",
+    "Please change the status for Suarez",
+])
+def test_write_action_requests_are_detected(question):
+    assert _is_write_action_request(question)
+
+
+@pytest.mark.parametrize("question", [
+    "What are my scouting notes on Messi?",
+    "Show me my notes about Suarez",
+    "Is Messi available for Saturday's match?",
+    "How is Messi performing this season?",
+])
+def test_read_only_questions_are_not_flagged_as_write_actions(question):
+    assert not _is_write_action_request(question)
+
+
+def test_write_action_request_returns_clean_decline_without_any_groq_call():
+    mock_groq_client = MagicMock()
+    with patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
+        result = answer_question("Add a note about Messi's finishing", MagicMock(), ANALYST_USER)
+
+    assert result == WRITE_ACTION_DECLINE_MESSAGE
+    mock_groq_client.chat.completions.create.assert_not_called()
+
+
 # --------------------------------- answer_question ---------------------------------
 
 def test_out_of_scope_question_returns_role_message_without_fetching_or_answering():
@@ -370,7 +500,7 @@ def test_out_of_scope_question_returns_role_message_without_fetching_or_answerin
          patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
         result = answer_question("What's the weather like today?", MagicMock(), ANALYST_USER)
 
-    assert result == out_of_scope_message("analyst")
+    assert result in out_of_scope_message_variants("analyst")
     mock_fetch.assert_not_called()
     assert mock_groq_client.chat.completions.create.call_count == 1
 
@@ -383,7 +513,7 @@ def test_recommendation_question_naming_a_real_player_is_declined_without_name_r
          patch("app.services.ai_service.get_groq_client") as mock_get_groq:
         result = answer_question("Who's a good replacement for Suárez?", MagicMock(), ANALYST_USER)
 
-    assert result == out_of_scope_message("analyst")
+    assert result in out_of_scope_message_variants("analyst")
     mock_resolve.assert_not_called()
     mock_get_groq.assert_not_called()
 
@@ -447,7 +577,7 @@ def test_role_gating_blocks_disallowed_category_with_role_specific_message(
          patch("app.services.ai_service.get_groq_client", return_value=mock_groq_client):
         result = answer_question(question, MagicMock(), user)
 
-    assert result == out_of_scope_message(role)
+    assert result in out_of_scope_message_variants(role)
     mock_fetch.assert_not_called()
     assert mock_groq_client.chat.completions.create.call_count == 1
 
