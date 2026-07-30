@@ -5,3 +5,16 @@ __pycache__/
 .DS_Store
 .claude/
 backend/app/data/output/
+
+# Local tooling config -- not part of the shipped codebase
+.agents/
+skills-lock.json
+
+# Local planning/status docs and reference material, not for a shipped codebase
+CODEBASE_AUDIT.md
+docs/MOCK_QA.md
+docs/PitchIQ_v2_BUILD_STATUS.md
+docs/TECHNICAL_DEEP_DIVE.md
+*.pdf
+reference/
+frontend/reference/

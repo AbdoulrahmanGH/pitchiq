@@ -51,7 +51,17 @@ def test_load_twice_yields_identical_row_counts(real_tables):
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
     match_ids = real_tables["matches"]["id"].tolist()
 
-    load(real_tables, client=client)
+    try:
+        load(real_tables, client=client)
+    except Exception as exc:
+        message = str(exc).lower()
+        if "reload_match_scoped_table" in message or "could not find" in message:
+            pytest.skip(
+                "reload_match_scoped_table() isn't installed on this database yet -- "
+                "apply migrations/0005_add_reload_match_scoped_table_function.sql "
+                "in the Supabase SQL editor first."
+            )
+        raise
     first_counts = _table_counts(client, match_ids)
 
     load(real_tables, client=client)

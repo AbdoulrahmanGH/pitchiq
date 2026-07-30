@@ -21,10 +21,11 @@ const TECH_CHOICES = [
 ];
 
 const LIMITATIONS = [
-  'Player data is simulated. The pipeline architecture is provider-agnostic but the extract layer currently reads from a local JSON file, not a live API',
-  'No authentication on any endpoint. This is an MVP adding auth would be the first production requirement',
-  'The fatigue risk thresholds (400 minutes, 40 avg sprints) are hardcoded. In production these would be configurable per club',
-  'BigQuery load is manual. A scheduled Cloud Function or Airflow DAG would automate this in a real setup',
+  'Single competition scope: FC Barcelona, La Liga 2015/16 only a deliberate MVP boundary. The extract layer is parameterized by competition/season, so adding another is a config change, not new architecture.',
+  "No physical tracking data. Distance and sprint metrics don't exist in free event-level data; workload risk is measured by minutes played and rest days instead, matching MIA's own real fatigue rule.",
+  'Row-Level Security is deliberately disabled. The frontend only ever reaches Supabase through FastAPI, which is the actual enforcement layer RLS would be defense-in-depth on an attack surface that doesn\'t exist in this design.',
+  'The AI assistant is read-only by design. Write-capable actions (e.g. logging a note via chat) are a deliberate future direction, not something claimed to work today.',
+  'BigQuery-derived analytics (rankings, trends) are only as fresh as the last scheduled pipeline run shown honestly via the dual freshness clock on this page, not hidden.',
 ];
 
 const BQ_QUERIES = [
@@ -89,19 +90,17 @@ export default function About() {
           <Section title="Why this exists">
             <Card>
               <p style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-                I started looking into how professional football clubs actually handle performance data, not the glamorous AI stuff, but the infrastructure underneath it. What I found was that most clubs are essentially renting their own data. It lives in vendor tools, gets built by analysts who eventually leave, and the club starts from scratch every season.
-              </p>
+              While looking into how football clubs handle performance data, one thing stood out: most of them don’t actually control it. Their workflows depend on external tools and individual analysts, which makes the system fragile and hard to scale over time. </p>
               <p style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text-secondary)', margin: 0 }}>
-                As a developer, that felt like a solvable problem. So I built PitchIQ to see what a club-owned alternative could look like.
-              </p>
+            PitchIQ started as a way to rethink that. As a developer, I wanted to see what a club-owned system could look like if it were designed from first principles. This project is that exploration, building a foundation where data, logic, and decision-making stay with the club.</p>
             </Card>
           </Section>
 
           <Section title="What it does">
             <Card>
               <p style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text-secondary)', margin: 0 }}>
-                PitchIQ ingests raw match performance data from external providers (simulated in StatsBomb JSON format), runs it through a Python ETL pipeline, stores it in a PostgreSQL database the club controls, and serves it through a FastAPI analytics layer. The data persists. The queries accumulate. The knowledge stays.
-              </p>
+          PitchIQ ingests raw match performance data from the StatsBomb Open Data repository, runs it through a Python ETL pipeline, stores it in a PostgreSQL database the club controls, and serves it through a FastAPI analytics layer. 
+            The FastAPI endpoints deliver processed data to the React frontend, where it is presented through interactive dashboards for coaches and analysts.</p>
             </Card>
           </Section>
 
